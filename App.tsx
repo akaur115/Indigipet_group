@@ -1,37 +1,55 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, {useState} from 'react';
+import {StatusBar, View, StyleSheet} from 'react-native';
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import WelcomeScreen from './src/screens/WelcomeScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import RegisterScreen from './src/screens/RegisterScreen';
+
+type Screen = 'welcome' | 'login' | 'register';
 
 function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+  const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
 
-  return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
-  );
-}
+  const renderScreen = () => {
+    switch (currentScreen) {
+      case 'welcome':
+        return (
+          <WelcomeScreen
+            onLogin={() => setCurrentScreen('login')}
+            onRegister={() => setCurrentScreen('register')}
+          />
+        );
 
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
+      case 'login':
+        return (
+          <LoginScreen
+            onRegister={() => setCurrentScreen('register')}
+            onBack={() => setCurrentScreen('welcome')}
+          />
+        );
+
+      case 'register':
+        return (
+          <RegisterScreen
+            onLogin={() => setCurrentScreen('login')}
+            onBack={() => setCurrentScreen('welcome')}
+          />
+        );
+
+      default:
+        return (
+          <WelcomeScreen
+            onLogin={() => setCurrentScreen('login')}
+            onRegister={() => setCurrentScreen('register')}
+          />
+        );
+    }
+  };
 
   return (
     <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
+      <StatusBar barStyle="dark-content" />
+      {renderScreen()}
     </View>
   );
 }
@@ -39,6 +57,7 @@ function AppContent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFBEF',
   },
 });
 
