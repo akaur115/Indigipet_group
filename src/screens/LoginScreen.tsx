@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, {useState} from 'react';
+
+import {loginUser} from '../services/authService';
+
 import {
   View,
   Text,
@@ -21,31 +24,101 @@ export default function LoginScreen({
 }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  // Login using Firebase Authentication
+  const handleLogin = async () => {
+    // Check required fields
     if (!email.trim() || !password) {
-      Alert.alert('Missing Information', 'Please enter your email and password.');
+      Alert.alert(
+        'Missing Information',
+        'Please enter your email and password.',
+      );
       return;
     }
 
-    // Firebase Authentication will be connected later.
-    Alert.alert('Login', 'Login functionality will be connected to Firebase.');
+    // Prevent multiple login requests
+    if (loading) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Log in using Firebase
+      await loginUser(email, password);
+
+      // Clear the password field after successful login
+      setPassword('');
+
+      // Display success message
+      Alert.alert(
+        'Login Successful!',
+        'Welcome back to IndigiPet!',
+      );
+    } catch (error: any) {
+      console.error('Login error:', error);
+
+      // Incorrect email or password
+      if (
+        error.code === 'auth/invalid-credential' ||
+        error.code === 'auth/wrong-password' ||
+        error.code === 'auth/user-not-found'
+      ) {
+        Alert.alert(
+          'Login Failed',
+          'Incorrect email or password. Please try again.',
+        );
+      }
+
+      // Invalid email
+      else if (error.code === 'auth/invalid-email') {
+        Alert.alert(
+          'Invalid Email',
+          'Please enter a valid email address.',
+        );
+      }
+
+      // Network connection error
+      else if (error.code === 'auth/network-request-failed') {
+        Alert.alert(
+          'Connection Error',
+          'Please check your internet connection and try again.',
+        );
+      }
+
+      // Other Firebase errors
+      else {
+        Alert.alert(
+          'Login Error',
+          'Unable to log in. Please try again later.',
+        );
+      }
+    } finally {
+      // Enable the Login button again
+      setLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled">
+        {/* Application name */}
         <Text style={styles.logo}>IndigiPet</Text>
 
+        {/* Temporary raccoon image */}
         <Text style={styles.raccoon}>🦝</Text>
 
+        {/* Welcome message */}
         <Text style={styles.heading}>Welcome Back!</Text>
 
         <Text style={styles.description}>
           Esiban missed you! Log in to continue your learning journey.
         </Text>
 
+        {/* Email */}
         <Text style={styles.label}>Email</Text>
 
         <TextInput
@@ -57,8 +130,11 @@ export default function LoginScreen({
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
+          autoCorrect={false}
+          editable={!loading}
         />
 
+        {/* Password */}
         <Text style={styles.label}>Password</Text>
 
         <TextInput
@@ -69,25 +145,30 @@ export default function LoginScreen({
           onChangeText={setPassword}
           secureTextEntry
           autoComplete="current-password"
+          editable={!loading}
         />
 
+        {/* Login button */}
         <TouchableOpacity
           style={styles.loginButton}
           onPress={handleLogin}
-        >
-          <Text style={styles.buttonText}>Login</Text>
+          disabled={loading}>
+          <Text style={styles.buttonText}>
+            {loading ? 'Logging In...' : 'Login'}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={onRegister}>
+        {/* Registration link */}
+        <TouchableOpacity onPress={onRegister} disabled={loading}>
           <Text style={styles.link}>
             Don't have an account? Create Account
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={onBack}>
+        {/* Back to Welcome */}
+        <TouchableOpacity onPress={onBack} disabled={loading}>
           <Text style={styles.backLink}>Back to Welcome</Text>
         </TouchableOpacity>
-
       </ScrollView>
     </SafeAreaView>
   );

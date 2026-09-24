@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import {registerUser} from '../services/authService';
 import {
   View,
   Text,
@@ -23,7 +24,8 @@ export default function RegisterScreen({
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
+  const [loading, setLoading] = useState(false);
+  
   const handleRegister = () => {
     if (!name.trim() || !username.trim() || !email.trim() || !password) {
       Alert.alert(
@@ -130,8 +132,11 @@ export default function RegisterScreen({
         <TouchableOpacity
           style={styles.registerButton}
           onPress={handleRegister}
+          disabled={loading}
         >
-          <Text style={styles.buttonText}>Register</Text>
+          <Text style={styles.buttonText}>
+            {loading ? 'Creating Account...' : 'Register'}
+          </Text>
         </TouchableOpacity>
 
         {/* Login link */}
