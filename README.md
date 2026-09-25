@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # IndigiPet
 
 ## Project Overview
