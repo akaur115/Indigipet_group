@@ -24,16 +24,20 @@ export const registerUser = async (
   email: string,
   password: string,
 ) => {
-  // Create an account using Firebase Authentication
+  console.log('STEP 1 - Starting Authentication');
+
   const userCredential = await createUserWithEmailAndPassword(
     auth,
     email.trim().toLowerCase(),
     password,
   );
 
+  console.log('STEP 2 - Authentication SUCCESS');
+
   const user = userCredential.user;
 
-  // Save the user's information in Firestore
+  console.log('STEP 3 - Starting Firestore save');
+
   await setDoc(doc(database, 'users', user.uid), {
     name: name.trim(),
     username: username.trim(),
@@ -41,10 +45,12 @@ export const registerUser = async (
     createdAt: serverTimestamp(),
   });
 
+  console.log('STEP 4 - Firestore SUCCESS');
+
   return user;
 };
 
-// Login an existing user
+// Login existing user
 export const loginUser = async (
   email: string,
   password: string,
