@@ -2,6 +2,9 @@ import {
   getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  type User,
 } from '@react-native-firebase/auth';
 
 import {
@@ -50,7 +53,7 @@ export const registerUser = async (
   return user;
 };
 
-// Login existing user
+
 export const loginUser = async (
   email: string,
   password: string,
@@ -62,4 +65,18 @@ export const loginUser = async (
   );
 
   return userCredential.user;
+};
+
+export const listenToAuthState = (
+  callback: (user: User | null) => void,
+) => {
+  return onAuthStateChanged(auth, callback);
+};
+
+export const getCurrentUser = () => {
+  return auth.currentUser;
+};
+
+export const logoutUser = async () => {
+  await signOut(auth);
 };
