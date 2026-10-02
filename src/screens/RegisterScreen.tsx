@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { registerUser } from '../services/authService';
+import React, {useState} from 'react';
+import {registerUser} from '../services/authService';
 
 import {
   Text,
@@ -59,13 +59,20 @@ export default function RegisterScreen({
       return;
     }
 
+    // Prevent multiple registration requests
+    if (loading) {
+      return;
+    }
+
     try {
       setLoading(true);
 
       console.log('Creating Firebase account...');
 
-      // Matches authService.ts:
-      // registerUser(name, username, email, password)
+      // Firebase:
+      // 1. Creates the account
+      // 2. Saves user information to Firestore
+      // 3. Sends the email verification message
       await registerUser(
         name,
         username,
@@ -75,62 +82,139 @@ export default function RegisterScreen({
 
       console.log('ACCOUNT CREATED SUCCESSFULLY');
 
-      Alert.alert(
-        'Account Created',
-        'Your IndigiPet account was created successfully.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setName('');
-              setUsername('');
-              setEmail('');
-              setPassword('');
-              onLogin();
-            },
-          },
-        ],
-      );
+      // Clear the registration fields
+      setName('');
+      setUsername('');
+      setEmail('');
+      setPassword('');
+
+      /*
+        IMPORTANT:
+
+        Do NOT call onLogin() here.
+
+        Firebase automatically signs in a newly
+        registered user.
+
+        App.tsx listens to Firebase authentication
+        state and will detect this user.
+
+        Because the new user's email is not verified,
+        App.tsx will automatically open:
+
+        VerifyEmailScreen
+      */
     } catch (error: any) {
-      console.log('REGISTER ERROR CODE:', error?.code);
-      console.log('REGISTER ERROR MESSAGE:', error?.message);
-
-      const errorText =
-        String(error?.code || 'Unknown error') +
-        '\n\n' +
-        String(error?.message || 'Unknown error');
-
-      Alert.alert(
-        'Registration Failed',
-        errorText,
+      console.log(
+        'REGISTER ERROR CODE:',
+        error?.code,
       );
+
+      console.log(
+        'REGISTER ERROR MESSAGE:',
+        error?.message,
+      );
+
+      // Email already exists
+      if (
+        error?.code ===
+        'auth/email-already-in-use'
+      ) {
+        Alert.alert(
+          'Account Already Exists',
+          'This email already has an account. Please login instead.',
+        );
+      }
+
+      // Invalid email
+      else if (
+        error?.code ===
+        'auth/invalid-email'
+      ) {
+        Alert.alert(
+          'Invalid Email',
+          'Please enter a valid email address.',
+        );
+      }
+
+      // Weak password
+      else if (
+        error?.code ===
+        'auth/weak-password'
+      ) {
+        Alert.alert(
+          'Weak Password',
+          'Please choose a stronger password.',
+        );
+      }
+
+      // Network problem
+      else if (
+        error?.code ===
+        'auth/network-request-failed'
+      ) {
+        Alert.alert(
+          'Connection Error',
+          'Please check your internet connection and try again.',
+        );
+      }
+
+      // Other Firebase errors
+      else {
+        const errorText =
+          String(
+            error?.code ||
+              'Unknown error',
+          ) +
+          '\n\n' +
+          String(
+            error?.message ||
+              'Unknown error',
+          );
+
+        Alert.alert(
+          'Registration Failed',
+          errorText,
+        );
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
+        contentContainerStyle={
+          styles.content
+        }
+        keyboardShouldPersistTaps="handled">
+
         {/* Application name */}
-        <Text style={styles.logo}>IndigiPet</Text>
+        <Text style={styles.logo}>
+          IndigiPet
+        </Text>
 
         {/* Temporary raccoon */}
-        <Text style={styles.raccoon}>🦝</Text>
+        <Text style={styles.raccoon}>
+          🦝
+        </Text>
 
         <Text style={styles.heading}>
           Create Account
         </Text>
 
-        <Text style={styles.description}>
-          Start your learning journey with Esiban!
+        <Text
+          style={styles.description}>
+          Start your learning journey with
+          Esiban!
         </Text>
 
         {/* Name */}
-        <Text style={styles.label}>Name</Text>
+        <Text style={styles.label}>
+          Name
+        </Text>
 
         <TextInput
           style={styles.input}
@@ -143,7 +227,9 @@ export default function RegisterScreen({
         />
 
         {/* Username */}
-        <Text style={styles.label}>Username</Text>
+        <Text style={styles.label}>
+          Username
+        </Text>
 
         <TextInput
           style={styles.input}
@@ -157,7 +243,9 @@ export default function RegisterScreen({
         />
 
         {/* Email */}
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>
+          Email
+        </Text>
 
         <TextInput
           style={styles.input}
@@ -173,7 +261,9 @@ export default function RegisterScreen({
         />
 
         {/* Password */}
-        <Text style={styles.label}>Password</Text>
+        <Text style={styles.label}>
+          Password
+        </Text>
 
         <TextInput
           style={styles.input}
@@ -190,13 +280,14 @@ export default function RegisterScreen({
         <TouchableOpacity
           style={[
             styles.registerButton,
-            loading && styles.disabledButton,
+            loading &&
+              styles.disabledButton,
           ]}
           onPress={handleRegister}
           disabled={loading}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.buttonText}>
+          activeOpacity={0.7}>
+          <Text
+            style={styles.buttonText}>
             {loading
               ? 'Creating Account...'
               : 'Register'}
@@ -206,8 +297,7 @@ export default function RegisterScreen({
         {/* Login link */}
         <TouchableOpacity
           onPress={onLogin}
-          disabled={loading}
-        >
+          disabled={loading}>
           <Text style={styles.link}>
             Already have an account? Login
           </Text>
@@ -216,8 +306,7 @@ export default function RegisterScreen({
         {/* Back button */}
         <TouchableOpacity
           onPress={onBack}
-          disabled={loading}
-        >
+          disabled={loading}>
           <Text style={styles.backLink}>
             Back to Welcome
           </Text>

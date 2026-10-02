@@ -31,27 +31,29 @@ export default function VerifyEmailScreen({
   const checkVerification = async () => {
     try {
       setLoading(true);
+      setMessage('Checking email verification...');
 
-      const verified =
-        await checkEmailVerification();
+    const verified = await checkEmailVerification();
 
-      if (verified) {
-        setMessage('Email verified!');
-        onVerified();
-      } else {
-        setMessage(
-          'Your email is not verified yet. Check your inbox.',
-        );
-      }
-    } catch (error: any) {
+    if (!verified) {
       setMessage(
-        error?.message ||
-          'Could not check verification.',
+        'Your email is not verified yet. Open the verification email and click the link first.',
       );
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
+
+    setMessage('Email verified successfully!');
+
+    onVerified();
+  } catch (error: any) {
+    setMessage(
+      error?.message ||
+        'Could not check email verification.',
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   const resend = async () => {
     try {
