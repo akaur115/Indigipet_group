@@ -9,17 +9,33 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
+import type {
+  MultiFactorResolver,
+  User,
+} from '@react-native-firebase/auth';
+
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
+import VerifyEmailScreen from './src/screens/VerifyEmailScreen';
+import MFASetupScreen from './src/screens/MFASetupScreen';
+import MFAVerifyScreen from './src/screens/MFAVerifyScreen';
 
 import {
   getCurrentUser,
   listenToAuthState,
   logoutUser,
+  userHasMFA,
 } from './src/services/authService';
 
-type Screen = 'welcome' | 'login' | 'register' | 'home';
+type Screen =
+  | 'welcome'
+  | 'login'
+  | 'register'
+  | 'verifyEmail'
+  | 'mfaSetup'
+  | 'mfaVerify'
+  | 'home';
 
 function App() {
   const [currentScreen, setCurrentScreen] =
@@ -28,38 +44,72 @@ function App() {
   const [checkingLogin, setCheckingLogin] =
     useState(true);
 
-  // Check if Firebase already has a logged-in user
+  const [mfaResolver, setMFAResolver] =
+    useState<MultiFactorResolver | null>(null);
+
+  
+  const routeUser = (user: User | null) => {
+    
+    if (!user) {
+      console.log('NO SAVED LOGIN');
+
+      setCurrentScreen('welcome');
+      return;
+    }
+
+    console.log('SIGNED IN USER:', user.email);
+
+    // User must verify email before MFA setup
+    if (!user.emailVerified) {
+      console.log('EMAIL NOT VERIFIED');
+
+      setCurrentScreen('verifyEmail');
+      return;
+    }
+
+    if (!userHasMFA(user)) {
+      console.log('MFA NOT SET UP');
+
+      setCurrentScreen('mfaSetup');
+      return;
+    }
+
+    console.log('MFA ENABLED');
+
+    setCurrentScreen('home');
+  };
+
+  
   useEffect(() => {
-    const unsubscribe = listenToAuthState(user => {
-      if (user) {
-        console.log('SAVED LOGIN FOUND:', user.email);
+    const unsubscribe =
+      listenToAuthState(user => {
+        routeUser(user);
 
-        setCurrentScreen('home');
-      } else {
-        console.log('NO SAVED LOGIN');
-
-        setCurrentScreen('welcome');
-      }
-
-      setCheckingLogin(false);
-    });
+        setCheckingLogin(false);
+      });
 
     return unsubscribe;
   }, []);
 
-  // Logout user
+  // Logout
   const handleLogout = async () => {
     try {
       await logoutUser();
 
+      setMFAResolver(null);
+
       setCurrentScreen('welcome');
     } catch (error) {
-      console.log('LOGOUT ERROR:', error);
+      console.log(
+        'LOGOUT ERROR:',
+        error,
+      );
     }
   };
 
   const renderScreen = () => {
     switch (currentScreen) {
+      
       case 'welcome':
         return (
           <WelcomeScreen
@@ -81,6 +131,17 @@ function App() {
             onBack={() =>
               setCurrentScreen('welcome')
             }
+            onMFARequired={resolver => {
+              console.log(
+                'MFA REQUIRED FOR LOGIN',
+              );
+
+              setMFAResolver(resolver);
+
+              setCurrentScreen(
+                'mfaVerify',
+              );
+            }}
           />
         );
 
@@ -96,16 +157,101 @@ function App() {
           />
         );
 
-      case 'home':
+
+      case 'verifyEmail':
+        return (
+          <VerifyEmailScreen
+            onVerified={() => {
+              console.log(
+                'EMAIL VERIFIED',
+              );
+
+              setCurrentScreen(
+                'mfaSetup',
+              );
+            }}
+            onBack={() =>
+              setCurrentScreen('login')
+            }
+          />
+        );
+
+      case 'mfaSetup':
+        return (
+          <MFASetupScreen
+            onComplete={() => {
+              console.log(
+                'MFA SETUP COMPLETE',
+              );
+
+              setCurrentScreen('home');
+            }}
+          />
+        );
+
+      case 'mfaVerify':
+        if (!mfaResolver) {
+          return (
+            <LoginScreen
+              onRegister={() =>
+                setCurrentScreen(
+                  'register',
+                )
+              }
+              onBack={() =>
+                setCurrentScreen(
+                  'welcome',
+                )
+              }
+              onMFARequired={
+                resolver => {
+                  setMFAResolver(
+                    resolver,
+                  );
+
+                  setCurrentScreen(
+                    'mfaVerify',
+                  );
+                }
+              }
+            />
+          );
+        }
+
+        return (
+          <MFAVerifyScreen
+            resolver={mfaResolver}
+            onComplete={() => {
+              console.log(
+                'MFA LOGIN SUCCESS',
+              );
+
+              setMFAResolver(null);
+
+              setCurrentScreen('home');
+            }}
+            onCancel={() => {
+              setMFAResolver(null);
+
+              setCurrentScreen('login');
+            }}
+          />
+        );
+
+      case 'home': {
         const user = getCurrentUser();
 
         return (
-          <View style={styles.homeContainer}>
+          <View
+            style={
+              styles.homeContainer
+            }>
             <Text style={styles.logo}>
               IndigiPet
             </Text>
 
-            <Text style={styles.raccoon}>
+            <Text
+              style={styles.raccoon}>
               🦝
             </Text>
 
@@ -113,27 +259,43 @@ function App() {
               Welcome!
             </Text>
 
-            <Text style={styles.message}>
+            <Text
+              style={styles.message}>
               You are logged in.
             </Text>
 
-            <Text style={styles.savedMessage}>
-              Your login is saved on this device.
+            <Text
+              style={
+                styles.savedMessage
+              }>
+              Your login is saved on this
+              device.
             </Text>
 
             <Text style={styles.email}>
               {user?.email}
             </Text>
 
+            <Text
+              style={styles.mfaStatus}>
+              MFA Enabled ✓
+            </Text>
+
             <TouchableOpacity
-              style={styles.logoutButton}
+              style={
+                styles.logoutButton
+              }
               onPress={handleLogout}>
-              <Text style={styles.logoutText}>
+              <Text
+                style={
+                  styles.logoutText
+                }>
                 Logout
               </Text>
             </TouchableOpacity>
           </View>
         );
+      }
 
       default:
         return (
@@ -149,18 +311,24 @@ function App() {
     }
   };
 
-  // Wait while Firebase checks saved login
+  // Firebase checks for saved login when app starts
   if (checkingLogin) {
     return (
-      <View style={styles.loadingContainer}>
-        <StatusBar barStyle="dark-content" />
+      <View
+        style={
+          styles.loadingContainer
+        }>
+        <StatusBar
+          barStyle="dark-content"
+        />
 
         <ActivityIndicator
           size="large"
           color="#035643"
         />
 
-        <Text style={styles.loadingText}>
+        <Text
+          style={styles.loadingText}>
           Loading IndigiPet...
         </Text>
       </View>
@@ -169,7 +337,9 @@ function App() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar
+        barStyle="dark-content"
+      />
 
       {renderScreen()}
     </View>
@@ -238,6 +408,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+  mfaStatus: {
+    color: '#168600',
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
+
   logoutButton: {
     backgroundColor: '#035643',
     paddingVertical: 15,
@@ -247,7 +423,7 @@ const styles = StyleSheet.create({
   },
 
   logoutText: {
-    color: '#FFFBEF',
+    color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 16,
   },
