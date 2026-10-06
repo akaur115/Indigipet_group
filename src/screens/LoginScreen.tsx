@@ -1,10 +1,11 @@
 import React, {useState} from 'react';
 
-import type {
-  MultiFactorResolver,
-} from '@react-native-firebase/auth';
+import {
+  loginUser,
+  resetPassword,
+} from '../services/authService';
 
-import {loginUser} from '../services/authService';
+import type {MultiFactorResolver} from '@react-native-firebase/auth';
 
 import {
 
@@ -20,11 +21,7 @@ import {
 type LoginScreenProps = {
   onRegister: () => void;
   onBack: () => void;
-
-  // Open MFA verification screen
-  onMFARequired: (
-    resolver: MultiFactorResolver,
-  ) => void;
+  onMFARequired: (resolver: MultiFactorResolver) => void;
 };
 
 export default function LoginScreen({
@@ -33,14 +30,13 @@ export default function LoginScreen({
   onMFARequired,
 }: LoginScreenProps) {
   const [email, setEmail] = useState('');
-  const [password, setPassword] =
-    useState('');
-  const [loading, setLoading] =
-    useState(false);
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
-  // Login using Firebase Authentication
+
   const handleLogin = async () => {
-    // Check required fields
+
     if (!email.trim() || !password) {
       Alert.alert(
         'Missing Information',
@@ -49,123 +45,162 @@ export default function LoginScreen({
       return;
     }
 
-    // Prevent multiple login requests
-    if (loading) {
+    if (loading || resetLoading) {
       return;
     }
 
     setLoading(true);
 
     try {
-      
+
       const result = await loginUser(
         email,
         password,
       );
 
+      
       if (result.mfaRequired) {
         setPassword('');
 
-        onMFARequired(
-          result.resolver,
-        );
+        onMFARequired(result.resolver);
 
         return;
       }
+
       setPassword('');
 
-      console.log(
-        'FIRST FACTOR LOGIN SUCCESS',
-        result.user.email,
+      Alert.alert(
+        'Login Successful!',
+        'Welcome back to IndigiPet!',
       );
     } catch (error: any) {
-      console.log(
-        'Login error:',
-        error,
-      );
+      console.error('Login error:', error);
 
-      
+
       if (
-        error?.code ===
-          'auth/invalid-credential' ||
-        error?.code ===
-          'auth/wrong-password' ||
-        error?.code ===
-          'auth/user-not-found'
+        error.code === 'auth/invalid-credential' ||
+        error.code === 'auth/wrong-password' ||
+        error.code === 'auth/user-not-found'
       ) {
         Alert.alert(
           'Login Failed',
           'Incorrect email or password. Please try again.',
         );
-      }
-
-      
-      else if (
-        error?.code ===
-        'auth/invalid-email'
+      } else if (
+        error.code === 'auth/invalid-email'
       ) {
         Alert.alert(
           'Invalid Email',
           'Please enter a valid email address.',
         );
-      }
-
-      // Network connection error
-      else if (
-        error?.code ===
-        'auth/network-request-failed'
+      } else if (
+        error.code === 'auth/network-request-failed'
       ) {
         Alert.alert(
           'Connection Error',
           'Please check your internet connection and try again.',
         );
-      }
-
-      // Other Firebase errors
-      else {
+      } else {
         Alert.alert(
           'Login Error',
-          error?.message ||
-            'Unable to log in. Please try again later.',
+          'Unable to log in. Please try again later.',
         );
       }
     } finally {
-      
+
       setLoading(false);
     }
   };
 
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert(
+        'Email Required',
+        'Enter your email address above first, then press Forgot Password.',
+      );
+
+      return;
+    }
+
+    if (loading || resetLoading) {
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      await resetPassword(email);
+
+      Alert.alert(
+        'Reset Email Sent',
+        'A password reset link has been sent to your email. Please check your inbox.',
+      );
+    } catch (error: any) {
+      console.error(
+        'Password reset error:',
+        error,
+      );
+
+      if (
+        error.code === 'auth/invalid-email'
+      ) {
+        Alert.alert(
+          'Invalid Email',
+          'Please enter a valid email address.',
+        );
+      } else if (
+        error.code === 'auth/network-request-failed'
+      ) {
+        Alert.alert(
+          'Connection Error',
+          'Please check your internet connection and try again.',
+        );
+      } else if (
+        error.code === 'auth/too-many-requests'
+      ) {
+        Alert.alert(
+          'Too Many Requests',
+          'Please wait a little while and try again.',
+        );
+      } else {
+        Alert.alert(
+          'Password Reset',
+          'Unable to send the password reset email. Please try again.',
+        );
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
-    <SafeAreaView
-      style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={
-          styles.content
-        }
+        contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled">
 
-        {/* Application name */}
+
         <Text style={styles.logo}>
           IndigiPet
         </Text>
 
-        {/* Temporary raccoon image */}
+
         <Text style={styles.raccoon}>
           🦝
         </Text>
 
-        {/* Welcome message */}
+
         <Text style={styles.heading}>
           Welcome Back!
         </Text>
 
-        <Text
-          style={styles.description}>
-          Esiban missed you! Log in to
-          continue your learning journey.
+        <Text style={styles.description}>
+          Esiban missed you! Log in to continue your learning journey.
         </Text>
 
         {/* Email */}
+
         <Text style={styles.label}>
           Email
         </Text>
@@ -180,61 +215,89 @@ export default function LoginScreen({
           autoCapitalize="none"
           autoComplete="email"
           autoCorrect={false}
-          editable={!loading}
+          editable={
+            !loading &&
+            !resetLoading
+          }
         />
 
         {/* Password */}
+
         <Text style={styles.label}>
           Password
         </Text>
 
         <TextInput
-          style={styles.input}
+          style={styles.passwordInput}
           placeholder="Enter your password"
           placeholderTextColor="#999999"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
           autoComplete="current-password"
-          editable={!loading}
+          editable={
+            !loading &&
+            !resetLoading
+          }
         />
 
-        {/* Login button */}
+        {/* Forgot Password */}
+
         <TouchableOpacity
-          style={[
-            styles.loginButton,
-            loading &&
-              styles.disabledButton,
-          ]}
+          onPress={handleForgotPassword}
+          disabled={
+            loading ||
+            resetLoading
+          }>
+          <Text style={styles.forgotPassword}>
+            {resetLoading
+              ? 'Sending Reset Email...'
+              : 'Forgot Password?'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Login */}
+
+        <TouchableOpacity
+          style={styles.loginButton}
           onPress={handleLogin}
-          disabled={loading}>
-          <Text
-            style={styles.buttonText}>
+          disabled={
+            loading ||
+            resetLoading
+          }>
+          <Text style={styles.buttonText}>
             {loading
               ? 'Logging In...'
               : 'Login'}
           </Text>
         </TouchableOpacity>
 
-        {/* Registration link */}
+        {/* Register */}
+
         <TouchableOpacity
           onPress={onRegister}
-          disabled={loading}>
+          disabled={
+            loading ||
+            resetLoading
+          }>
           <Text style={styles.link}>
-            Don't have an account?
-            Create Account
+            Don't have an account? Create Account
           </Text>
         </TouchableOpacity>
 
-        {/* Back to Welcome */}
+        {/* Back */}
+
         <TouchableOpacity
           onPress={onBack}
-          disabled={loading}>
-          <Text
-            style={styles.backLink}>
+          disabled={
+            loading ||
+            resetLoading
+          }>
+          <Text style={styles.backLink}>
             Back to Welcome
           </Text>
         </TouchableOpacity>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -301,16 +364,32 @@ const styles = StyleSheet.create({
     color: '#035643',
   },
 
+  passwordInput: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: '#B8CFC5',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 15,
+    marginBottom: 8,
+    fontSize: 15,
+    color: '#035643',
+  },
+
+  forgotPassword: {
+    color: '#089BA1',
+    textAlign: 'right',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 20,
+  },
+
   loginButton: {
     backgroundColor: '#035643',
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
-    marginTop: 10,
-  },
-
-  disabledButton: {
-    opacity: 0.6,
+    marginTop: 5,
   },
 
   buttonText: {
