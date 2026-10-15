@@ -1,3 +1,4 @@
+
 import React, {
   useEffect,
   useRef,
@@ -11,6 +12,7 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 
 import type {
@@ -18,6 +20,7 @@ import type {
   User,
 } from '@react-native-firebase/auth';
 
+// EXISTING AUTHENTICATION SCREENS
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -25,6 +28,12 @@ import VerifyEmailScreen from './src/screens/VerifyEmailScreen';
 import MFASetupScreen from './src/screens/MFASetupScreen';
 import MFAVerifyScreen from './src/screens/MFAVerifyScreen';
 
+// NEW SCREENS
+import HomeScreen from './src/screens/HomeScreen';
+import LearningScreen from './src/screens/LearningScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+
+// FIREBASE AUTHENTICATION
 import {
   getCurrentUser,
   listenToAuthState,
@@ -32,6 +41,7 @@ import {
   userHasMFA,
 } from './src/services/authService';
 
+// SCREEN TYPES
 type Screen =
   | 'welcome'
   | 'login'
@@ -39,7 +49,37 @@ type Screen =
   | 'verifyEmail'
   | 'mfaSetup'
   | 'mfaVerify'
-  | 'home';
+  | 'home'
+  | 'learning'
+  | 'settings';
+
+type MainTab =
+  | 'home'
+  | 'learning'
+  | 'settings';
+
+// BOTTOM NAVIGATION
+const TABS: {
+  id: MainTab;
+  icon: string;
+  label: string;
+}[] = [
+  {
+    id: 'home',
+    icon: '🐾',
+    label: 'Home',
+  },
+  {
+    id: 'learning',
+    icon: '📖',
+    label: 'Learning',
+  },
+  {
+    id: 'settings',
+    icon: '⚙️',
+    label: 'Settings',
+  },
+];
 
 function App() {
   const [currentScreen, setCurrentScreen] =
@@ -51,95 +91,61 @@ function App() {
   const [mfaResolver, setMFAResolver] =
     useState<MultiFactorResolver | null>(null);
 
-  /*
-   * This is used when a new user finishes MFA.
-   *
-   * Normally signing out sends the user to Welcome.
-   * During account setup we want signing out to send
-   * the new user directly to Login instead.
-   */
-  const goToLoginAfterSignOut =
-    useRef(false);
+  // New users should return to Login after MFA setup
+  const goToLoginAfterSignOut = useRef(false);
 
 
-
-  const routeUser = (
-    user: User | null,
-  ) => {
-    // No user is signed in
+  const routeUser = (user: User | null) => {
     if (!user) {
       console.log('NO SAVED LOGIN');
 
-      /*
-       * New user just completed registration + MFA.
-       * Send them directly to Login.
-       */
-      if (
-        goToLoginAfterSignOut.current
-      ) {
+      if (goToLoginAfterSignOut.current) {
+        goToLoginAfterSignOut.current = false;
+
         console.log(
           'ACCOUNT SETUP COMPLETE - GOING TO LOGIN',
         );
 
-        goToLoginAfterSignOut.current =
-          false;
-
         setCurrentScreen('login');
-
-        return;
+      } else {
+        setCurrentScreen('welcome');
       }
 
-      // Normal logout / no saved session
-      setCurrentScreen('welcome');
 
       return;
     }
 
-    console.log(
-      'SIGNED IN USER:',
-      user.email,
-    );
+    console.log('SIGNED IN USER:', user.email);
 
-    // User must verify email first
+    // Check email verification
     if (!user.emailVerified) {
-      console.log(
-        'EMAIL NOT VERIFIED',
-      );
+      console.log('EMAIL NOT VERIFIED');
 
-      setCurrentScreen(
-        'verifyEmail',
-      );
-
+      setCurrentScreen('verifyEmail');
       return;
     }
 
-    // User must set up MFA
+    // Check MFA setup
     if (!userHasMFA(user)) {
-      console.log(
-        'MFA NOT SET UP',
-      );
+      console.log('MFA NOT SET UP');
 
-      setCurrentScreen(
-        'mfaSetup',
-      );
-
+      setCurrentScreen('mfaSetup');
       return;
     }
 
-    // Fully authenticated user
-    console.log('MFA ENABLED');
+    // Authentication completed
+    console.log('LOGIN COMPLETE - OPEN HOME');
 
     setCurrentScreen('home');
   };
 
 
   useEffect(() => {
-    const unsubscribe =
-      listenToAuthState(user => {
-        routeUser(user);
+    const unsubscribe = listenToAuthState(user => {
+      routeUser(user);
 
-        setCheckingLogin(false);
-      });
+      setCheckingLogin(false);
+    });
 
     return unsubscribe;
   }, []);
@@ -147,28 +153,20 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      /*
-       * Normal logout should return to
-       * the Welcome screen.
-       */
-      goToLoginAfterSignOut.current =
-        false;
+      goToLoginAfterSignOut.current = false;
 
       await logoutUser();
 
       setMFAResolver(null);
 
-      setCurrentScreen(
-        'welcome',
-      );
+      setCurrentScreen('welcome');
+
+      console.log('USER LOGGED OUT');
     } catch (error) {
-      console.log(
-        'LOGOUT ERROR:',
-        error,
-      );
+      console.log('LOGOUT ERROR:', error);
+      throw error;
     }
   };
-
 
   const renderScreen = () => {
     switch (currentScreen) {
@@ -178,44 +176,31 @@ function App() {
         return (
           <WelcomeScreen
             onLogin={() =>
-              setCurrentScreen(
-                'login',
-              )
+              setCurrentScreen('login')
             }
             onRegister={() =>
-              setCurrentScreen(
-                'register',
-              )
+              setCurrentScreen('register')
             }
           />
         );
+
 
 
       case 'login':
         return (
           <LoginScreen
             onRegister={() =>
-              setCurrentScreen(
-                'register',
-              )
+              setCurrentScreen('register')
             }
             onBack={() =>
-              setCurrentScreen(
-                'welcome',
-              )
+              setCurrentScreen('welcome')
             }
             onMFARequired={resolver => {
-              console.log(
-                'MFA REQUIRED FOR LOGIN',
-              );
+              console.log('MFA REQUIRED FOR LOGIN');
 
-              setMFAResolver(
-                resolver,
-              );
+              setMFAResolver(resolver);
 
-              setCurrentScreen(
-                'mfaVerify',
-              );
+              setCurrentScreen('mfaVerify');
             }}
           />
         );
@@ -225,14 +210,10 @@ function App() {
         return (
           <RegisterScreen
             onLogin={() =>
-              setCurrentScreen(
-                'login',
-              )
+              setCurrentScreen('login')
             }
             onBack={() =>
-              setCurrentScreen(
-                'welcome',
-              )
+              setCurrentScreen('welcome')
             }
           />
         );
@@ -241,196 +222,182 @@ function App() {
         return (
           <VerifyEmailScreen
             onVerified={() => {
-              console.log(
-                'EMAIL VERIFIED',
-              );
+              console.log('EMAIL VERIFIED');
 
-              setCurrentScreen(
-                'mfaSetup',
-              );
+              setCurrentScreen('mfaSetup');
             }}
             onBack={() =>
-              setCurrentScreen(
-                'login',
-              )
+              setCurrentScreen('login')
             }
           />
         );
-
 
       case 'mfaSetup':
         return (
           <MFASetupScreen
             onComplete={async () => {
-              console.log(
-                'MFA SETUP COMPLETE',
-              );
+              console.log('MFA SETUP COMPLETE');
 
               try {
-                /*
-                 * MFA is finished.
-                 *
-                 * Sign the newly-created
-                 * user out automatically.
-                 */
-                goToLoginAfterSignOut.current =
-                  true;
+                // Automatically sign out after setup
+                goToLoginAfterSignOut.current = true;
 
                 await logoutUser();
 
-                setMFAResolver(
-                  null,
-                );
+                setMFAResolver(null);
 
-                /*
-                 * This also makes sure
-                 * Login appears even if
-                 * the auth listener takes
-                 * a moment to update.
-                 */
-                setCurrentScreen(
-                  'login',
-                );
+                // User must log in after registering
+                setCurrentScreen('login');
+
               } catch (error) {
                 console.log(
                   'AUTO LOGOUT ERROR:',
                   error,
                 );
 
-                goToLoginAfterSignOut.current =
-                  false;
+                goToLoginAfterSignOut.current = false;
+
+                Alert.alert(
+                  'Setup Complete',
+                  'MFA setup completed, but automatic logout failed. Please log out from Settings.',
+                );
+
+                setCurrentScreen('home');
               }
             }}
           />
         );
+
 
       case 'mfaVerify':
         if (!mfaResolver) {
           return (
             <LoginScreen
               onRegister={() =>
-                setCurrentScreen(
-                  'register',
-                )
+                setCurrentScreen('register')
               }
               onBack={() =>
-                setCurrentScreen(
-                  'welcome',
-                )
+                setCurrentScreen('welcome')
               }
-              onMFARequired={
-                resolver => {
-                  setMFAResolver(
-                    resolver,
-                  );
+              onMFARequired={resolver => {
+                setMFAResolver(resolver);
 
-                  setCurrentScreen(
-                    'mfaVerify',
-                  );
-                }
-              }
+                setCurrentScreen('mfaVerify');
+              }}
             />
           );
         }
 
         return (
           <MFAVerifyScreen
-            resolver={
-              mfaResolver
-            }
+            resolver={mfaResolver}
             onComplete={() => {
-              console.log(
-                'MFA LOGIN SUCCESS',
-              );
+              console.log('MFA LOGIN SUCCESS');
 
-              setMFAResolver(
-                null,
-              );
+              setMFAResolver(null);
 
-              setCurrentScreen(
-                'home',
-              );
+              // NEW HOME SCREEN OPENS HERE
+              setCurrentScreen('home');
             }}
             onCancel={() => {
-              setMFAResolver(
-                null,
-              );
+              setMFAResolver(null);
 
-              setCurrentScreen(
-                'login',
-              );
+              setCurrentScreen('login');
             }}
           />
         );
 
 
-      case 'home': {
-        const user =
-          getCurrentUser();
+      case 'home':
+      case 'learning':
+      case 'settings': {
+        const user = getCurrentUser();
+
+        if (!user) {
+          return (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator
+                size="large"
+                color="#035643"
+              />
+            </View>
+          );
+        }
 
         return (
-          <View
-            style={
-              styles.homeContainer
-            }>
-            <Text
-              style={styles.logo}>
-              IndigiPet
-            </Text>
+          <View style={styles.mainLayout}>
 
-            <Text
-              style={
-                styles.raccoon
-              }>
-              🦝
-            </Text>
+            {/* MAIN SCREEN CONTENT */}
 
-            <Text
-              style={styles.title}>
-              Welcome!
-            </Text>
+            <View style={styles.mainContent}>
 
-            <Text
-              style={
-                styles.message
-              }>
-              You are logged in.
-            </Text>
+              {currentScreen === 'home' ? (
 
-            <Text
-              style={
-                styles.savedMessage
-              }>
-              Your login is saved on
-              this device.
-            </Text>
+                <HomeScreen
+                  uid={user.uid}
+                />
 
-            <Text
-              style={styles.email}>
-              {user?.email}
-            </Text>
+              ) : currentScreen === 'learning' ? (
 
-            <Text
-              style={
-                styles.mfaStatus
-              }>
-              MFA Enabled ✓
-            </Text>
+                <LearningScreen
+                  uid={user.uid}
+                  onReturnHome={() =>
+                    setCurrentScreen('home')
+                  }
+                />
 
-            <TouchableOpacity
-              style={
-                styles.logoutButton
-              }
-              onPress={
-                handleLogout
-              }>
-              <Text
-                style={
-                  styles.logoutText
-                }>
-                Logout
-              </Text>
-            </TouchableOpacity>
+              ) : (
+
+                <SettingsScreen
+                  email={user.email ?? ''}
+                  onLogout={handleLogout}
+                />
+
+              )}
+
+            </View>
+
+            {/* BOTTOM NAVIGATION */}
+
+            <View style={styles.bottomBar}>
+
+              {TABS.map(tab => {
+                const selected =
+                  currentScreen === tab.id;
+
+                return (
+                  <TouchableOpacity
+                    key={tab.id}
+                    style={styles.bottomItem}
+                    onPress={() =>
+                      setCurrentScreen(tab.id)
+                    }
+                    accessibilityRole="tab"
+                    accessibilityState={{
+                      selected,
+                    }}>
+
+                    <Text style={styles.bottomIcon}>
+                      {tab.icon}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.bottomText,
+                        selected &&
+                          styles.bottomTextSelected,
+                      ]}>
+
+                      {tab.label}
+
+                    </Text>
+
+                  </TouchableOpacity>
+                );
+              })}
+
+            </View>
+
           </View>
         );
       }
@@ -440,14 +407,10 @@ function App() {
         return (
           <WelcomeScreen
             onLogin={() =>
-              setCurrentScreen(
-                'login',
-              )
+              setCurrentScreen('login')
             }
             onRegister={() =>
-              setCurrentScreen(
-                'register',
-              )
+              setCurrentScreen('register')
             }
           />
         );
@@ -457,10 +420,8 @@ function App() {
 
   if (checkingLogin) {
     return (
-      <View
-        style={
-          styles.loadingContainer
-        }>
+      <View style={styles.loadingContainer}>
+
         <StatusBar
           barStyle="dark-content"
         />
@@ -470,12 +431,10 @@ function App() {
           color="#035643"
         />
 
-        <Text
-          style={
-            styles.loadingText
-          }>
+        <Text style={styles.loadingText}>
           Loading IndigiPet...
         </Text>
+
       </View>
     );
   }
@@ -483,104 +442,76 @@ function App() {
 
   return (
     <View style={styles.container}>
+
       <StatusBar
         barStyle="dark-content"
       />
 
       {renderScreen()}
+
     </View>
   );
 }
 
+const styles = StyleSheet.create({
 
-const styles =
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor:
-        '#FFFBEF',
-    },
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFBEF',
+  },
 
-    loadingContainer: {
-      flex: 1,
-      justifyContent:
-        'center',
-      alignItems: 'center',
-      backgroundColor:
-        '#FFFBEF',
-    },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEF',
+  },
 
-    loadingText: {
-      color: '#035643',
-      marginTop: 12,
-      fontSize: 15,
-    },
+  loadingText: {
+    color: '#035643',
+    marginTop: 12,
+    fontSize: 15,
+  },
 
-    homeContainer: {
-      flex: 1,
-      justifyContent:
-        'center',
-      alignItems: 'center',
-      backgroundColor:
-        '#FFFBEF',
-      padding: 25,
-    },
+  mainLayout: {
+    flex: 1,
+    backgroundColor: '#FFFBEF',
+  },
 
-    logo: {
-      fontSize: 38,
-      fontWeight: 'bold',
-      color: '#035643',
-    },
+  mainContent: {
+    flex: 1,
+  },
 
-    raccoon: {
-      fontSize: 90,
-      marginVertical: 20,
-    },
+  bottomBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFBF0',
+    borderTopWidth: 1,
+    borderTopColor: '#E5DAC8',
+    paddingVertical: 9,
+    paddingBottom: 13,
+  },
 
-    title: {
-      fontSize: 28,
-      fontWeight: 'bold',
-      color: '#035643',
-    },
+  bottomItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-    message: {
-      fontSize: 16,
-      color: '#6E6151',
-      marginTop: 12,
-    },
+  bottomIcon: {
+    fontSize: 24,
+  },
 
-    savedMessage: {
-      fontSize: 14,
-      color: '#6E6151',
-      marginTop: 8,
-    },
+  bottomText: {
+    fontSize: 11,
+    color: '#6E6151',
+    marginTop: 3,
+  },
 
-    email: {
-      color: '#089BA1',
-      fontWeight: '600',
-      marginTop: 10,
-    },
+  bottomTextSelected: {
+    color: '#035643',
+    fontWeight: 'bold',
+  },
 
-    mfaStatus: {
-      color: '#168600',
-      fontWeight: 'bold',
-      marginTop: 10,
-    },
-
-    logoutButton: {
-      backgroundColor:
-        '#035643',
-      paddingVertical: 15,
-      paddingHorizontal: 55,
-      borderRadius: 14,
-      marginTop: 30,
-    },
-
-    logoutText: {
-      color: '#FFFFFF',
-      fontWeight: 'bold',
-      fontSize: 16,
-    },
-  });
+});
 
 export default App;
