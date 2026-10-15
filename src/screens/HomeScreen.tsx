@@ -294,7 +294,7 @@ export default function HomeScreen({uid}: Props) {
           {/* FULL BODY RACCOON PNG */}
 
           <Image
-            source={require('../assets/images/raccoon-full.png')}
+            source={require('../../assets/images/raccoon-full.png')}
             style={styles.petImage}
             resizeMode="contain"
             accessibilityLabel="Esiban the raccoon"
