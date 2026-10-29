@@ -349,10 +349,11 @@ function App() {
               ) : (
 
                 <SettingsScreen
-                  email={user.email ?? ''}
-                  onLogout={handleLogout}
+                email={user.email ?? ''}
+                onLogout={handleLogout}
+                onReturnHome={() => setCurrentScreen('home')}
                 />
-
+              
               )}
 
             </View>
