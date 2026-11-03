@@ -4,6 +4,7 @@ import React, {useEffect, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -20,9 +21,14 @@ import {
   onSnapshot,
 } from '@react-native-firebase/firestore';
 
+import {getCurrentUser} from '../services/authService';
+
+import LegalDocumentScreen from './LegalDocumentScreen';
+
 import {
-  getCurrentUser,
-} from '../services/authService';
+  PRIVACY_POLICY,
+  TERMS_OF_SERVICE,
+} from './legalDocuments';
 
 type Props = {
   email: string;
@@ -37,19 +43,17 @@ type SectionId =
   | 'about'
   | 'legal';
 
+type LegalPage = 'privacy' | 'terms' | null;
+
 type SectionsState = Record<SectionId, boolean>;
 
-// IMPROVED COLOURS FOR BETTER VISIBILITY
 const COLORS = {
   darkGreen: '#035643',
   cream: '#FFFBEF',
   cream2: '#FFFBF0',
-
-  // Darker, easier-to-read text
   text: '#292521',
   secondaryText: '#484139',
   mutedText: '#595147',
-
   teal: '#089BA1',
   tealShadow: '#08797A',
   red: '#B23F38',
@@ -71,15 +75,16 @@ export default function SettingsScreen({
       legal: false,
     });
 
+  const [legalPage, setLegalPage] =
+    useState<LegalPage>(null);
+
   const [
     notificationsEnabled,
     setNotificationsEnabled,
   ] = useState(false);
 
-  const [
-    soundEnabled,
-    setSoundEnabled,
-  ] = useState(false);
+  const [soundEnabled, setSoundEnabled] =
+    useState(false);
 
   const [username, setUsername] =
     useState('Not available');
@@ -87,7 +92,7 @@ export default function SettingsScreen({
   const [savingLogout, setSavingLogout] =
     useState(false);
 
-  // LOAD ACCOUNT DETAILS FROM FIREBASE
+  // LOAD ACCOUNT INFORMATION FROM FIREBASE
   useEffect(() => {
     const user = getCurrentUser();
 
@@ -125,10 +130,8 @@ export default function SettingsScreen({
     return unsubscribe;
   }, []);
 
-  // OPEN OR CLOSE SECTIONS
-  const toggleSection = (
-    section: SectionId,
-  ) => {
+  // OPEN OR CLOSE SETTINGS DROPDOWNS
+  const toggleSection = (section: SectionId) => {
     setSections(previous => ({
       ...previous,
       [section]: !previous[section],
@@ -171,74 +174,94 @@ export default function SettingsScreen({
     );
   };
 
-  // DELETE ACCOUNT - PREVIEW ONLY
+  // REQUEST ACCOUNT DELETION BY EMAIL
+  // DOES NOT DELETE FIREBASE DATA AUTOMATICALLY
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your IndigiPet account?',
+      'Request Account Deletion',
+      'The Privacy Policy says you may request permanent account deletion by emailing support@giigidomikinaak.ca from your account email address. Your progress, pet and coins will be removed when the request is processed. This button does not immediately delete your account.',
       [
         {
           text: 'Cancel',
           style: 'cancel',
         },
         {
-          text: 'Continue',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Coming Soon',
-              'Secure account deletion has not been implemented yet. Your account has not been deleted.',
+          text: 'Email Support',
+          onPress: async () => {
+            const subject = encodeURIComponent(
+              'IndigiPet Account Deletion Request',
             );
+
+            const body = encodeURIComponent(
+              'Hello,\n\n' +
+              'I would like to request deletion of my IndigiPet account and associated data.\n\n' +
+              'Account email: ' +
+              (email || '[enter your account email]') +
+              '\n\nThank you.',
+            );
+
+            const mailto =
+              'mailto:support@giigidomikinaak.ca' +
+              '?subject=' + subject +
+              '&body=' + body;
+
+            try {
+              await Linking.openURL(mailto);
+            } catch {
+              Alert.alert(
+                'Email App Not Available',
+                'Please send your request from your account email to support@giigidomikinaak.ca.',
+              );
+            }
           },
         },
       ],
     );
   };
 
-  const handlePrivacyPolicy = () => {
-    Alert.alert(
-      'Privacy Policy',
-      'The approved Privacy Policy will be added here.',
-    );
-  };
-
-  const handleTerms = () => {
-    Alert.alert(
-      'Terms of Use',
-      'The approved Terms of Use will be added here.',
-    );
-  };
-
-  // REUSABLE DROPDOWN HEADER
-  const renderSectionHeader = (
+  // DROPDOWN HEADER
+  const renderHeader = (
     id: SectionId,
     title: string,
-  ) => {
-    const expanded = sections[id];
+  ) => (
+    <TouchableOpacity
+      style={styles.sectionHeader}
+      onPress={() => toggleSection(id)}
+      accessibilityRole="button"
+      accessibilityState={{
+        expanded: sections[id],
+      }}>
 
+      <Text style={styles.sectionTitle}>
+        {title}
+      </Text>
+
+      <Text style={styles.chevron}>
+        {sections[id] ? '⌃' : '⌄'}
+      </Text>
+
+    </TouchableOpacity>
+  );
+
+  // OPEN CLIENT LEGAL DOCUMENT
+  if (legalPage) {
     return (
-      <TouchableOpacity
-        style={styles.sectionHeader}
-        onPress={() => toggleSection(id)}
-        accessibilityRole="button"
-        accessibilityState={{expanded}}>
-
-        <Text style={styles.sectionTitle}>
-          {title}
-        </Text>
-
-        <Text style={styles.chevron}>
-          {expanded ? '⌃' : '⌄'}
-        </Text>
-      </TouchableOpacity>
+      <LegalDocumentScreen
+        document={
+          legalPage === 'privacy'
+            ? PRIVACY_POLICY
+            : TERMS_OF_SERVICE
+        }
+        onBack={() => setLegalPage(null)}
+      />
     );
-  };
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* GREEN HEADER */}
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -258,15 +281,14 @@ export default function SettingsScreen({
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={
+          styles.scrollContent
+        }
         showsVerticalScrollIndicator={false}>
 
         {/* ACCOUNT */}
         <View style={styles.sectionCard}>
-          {renderSectionHeader(
-            'account',
-            'Account',
-          )}
+          {renderHeader('account', 'Account')}
 
           {sections.account && (
             <View style={styles.sectionBody}>
@@ -283,7 +305,7 @@ export default function SettingsScreen({
 
         {/* NOTIFICATIONS */}
         <View style={styles.sectionCard}>
-          {renderSectionHeader(
+          {renderHeader(
             'notifications',
             'Notifications',
           )}
@@ -326,10 +348,7 @@ export default function SettingsScreen({
 
         {/* SOUND */}
         <View style={styles.sectionCard}>
-          {renderSectionHeader(
-            'sound',
-            'Sound',
-          )}
+          {renderHeader('sound', 'Sound')}
 
           {sections.sound && (
             <View style={styles.sectionBody}>
@@ -351,9 +370,7 @@ export default function SettingsScreen({
                 />
 
                 <Text style={styles.switchText}>
-                  {soundEnabled
-                    ? 'On'
-                    : 'Off'}
+                  {soundEnabled ? 'On' : 'Off'}
                 </Text>
               </View>
 
@@ -367,10 +384,7 @@ export default function SettingsScreen({
 
         {/* ABOUT */}
         <View style={styles.sectionCard}>
-          {renderSectionHeader(
-            'about',
-            'About',
-          )}
+          {renderHeader('about', 'About')}
 
           {sections.about && (
             <View style={styles.sectionBody}>
@@ -393,30 +407,33 @@ export default function SettingsScreen({
 
         {/* LEGAL AND HELP */}
         <View style={styles.sectionCard}>
-          {renderSectionHeader(
-            'legal',
-            'Legal & Help',
-          )}
+          {renderHeader('legal', 'Legal & Help')}
 
           {sections.legal && (
             <View style={styles.sectionBody}>
+
               <TouchableOpacity
-                onPress={handlePrivacyPolicy}
+                onPress={() =>
+                  setLegalPage('privacy')
+                }
                 accessibilityRole="button">
 
                 <Text style={styles.legalLink}>
-                  Privacy Policy
+                  Privacy Policy  ›
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={handleTerms}
+                onPress={() =>
+                  setLegalPage('terms')
+                }
                 accessibilityRole="button">
 
                 <Text style={styles.legalLink}>
-                  Terms of Use
+                  Terms of Service  ›
                 </Text>
               </TouchableOpacity>
+
             </View>
           )}
         </View>
@@ -458,7 +475,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.cream,
   },
-
   header: {
     backgroundColor: COLORS.darkGreen,
     minHeight: 82,
@@ -467,36 +483,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 17,
   },
-
   backButton: {
     width: 38,
     height: 44,
     justifyContent: 'center',
   },
-
   backArrow: {
     fontSize: 34,
     color: '#FFFFFF',
     fontWeight: '400',
   },
-
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 26,
     fontWeight: 'bold',
     marginLeft: 7,
   },
-
   scroll: {
     flex: 1,
   },
-
   scrollContent: {
     paddingHorizontal: 17,
     paddingTop: 18,
     paddingBottom: 35,
   },
-
   sectionCard: {
     backgroundColor: COLORS.cream2,
     borderColor: COLORS.border,
@@ -505,8 +515,6 @@ const styles = StyleSheet.create({
     marginBottom: 13,
     overflow: 'hidden',
   },
-
-  // BIGGER AND DARKER SECTION TITLES
   sectionHeader: {
     minHeight: 53,
     paddingHorizontal: 16,
@@ -515,28 +523,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-
   sectionTitle: {
     color: COLORS.text,
     fontSize: 19,
     fontWeight: 'bold',
     flex: 1,
   },
-
   chevron: {
     color: COLORS.text,
     fontSize: 27,
     fontWeight: 'bold',
     marginLeft: 10,
   },
-
   sectionBody: {
     paddingHorizontal: 16,
     paddingBottom: 17,
     paddingTop: 3,
   },
-
-  // BIGGER ACCOUNT DETAILS
   detailText: {
     color: COLORS.text,
     fontSize: 16,
@@ -544,8 +547,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginTop: 5,
   },
-
-  // MORE READABLE DESCRIPTIONS
   description: {
     color: COLORS.secondaryText,
     fontSize: 16,
@@ -553,28 +554,23 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 9,
   },
-
   previewNote: {
     color: COLORS.mutedText,
     fontSize: 14,
     lineHeight: 21,
     marginTop: 8,
   },
-
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
   },
-
   switchText: {
     color: COLORS.text,
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 12,
   },
-
-  // DARKER LEGAL LINKS
   legalLink: {
     color: COLORS.text,
     fontSize: 16,
@@ -583,7 +579,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 9,
   },
-
   signOutButton: {
     backgroundColor: COLORS.teal,
     minHeight: 50,
@@ -595,7 +590,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: COLORS.tealShadow,
   },
-
   deleteButton: {
     backgroundColor: COLORS.red,
     minHeight: 50,
@@ -603,12 +597,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // BIGGER BUTTON LETTERS
   actionButtonText: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: 'bold',
-    
   },
 });
