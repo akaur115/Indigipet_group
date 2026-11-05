@@ -1,4 +1,3 @@
-
 import React, {useEffect, useState} from 'react';
 
 import {
@@ -19,7 +18,15 @@ import {
 } from '@react-native-firebase/firestore';
 
 import {getLevel} from '../services/gameService';
-import {QUIZ_WORDS} from '../data/quizWords';
+
+import {
+  QUIZ_WORDS,
+} from '../data/quizWords';
+
+import type {
+  MasteryTier,
+} from '../services/quizEngine';
+
 import QuizScreen from './QuizScreen';
 
 type Props = {
@@ -41,6 +48,12 @@ type Category = {
   available: boolean;
 };
 
+type WordCounts = {
+  new: number;
+  practicing: number;
+  known: number;
+};
+
 const COLORS = {
   cream: '#FFFBEF',
   cream2: '#FFFBF0',
@@ -49,6 +62,14 @@ const COLORS = {
   tealShadow: '#08797A',
   brown: '#6E6151',
   border: '#E5DAC8',
+
+  new: '#AC31F3',
+  practicing: '#0372DA',
+  known: '#168600',
+
+  newBackground: '#F3E6FF',
+  practicingBackground: '#E5F1FF',
+  knownBackground: '#E4F5DF',
 };
 
 const CATEGORIES: Category[] = [
@@ -82,23 +103,72 @@ const CATEGORIES: Category[] = [
   },
 ];
 
+function getTierLabel(
+  tier: MasteryTier,
+): string {
+  if (tier === 'known') {
+    return 'Known';
+  }
+
+  if (tier === 'learning') {
+    return 'Practicing';
+  }
+
+  return 'New';
+}
+
+function getTierColor(
+  tier: MasteryTier,
+): string {
+  if (tier === 'known') {
+    return COLORS.known;
+  }
+
+  if (tier === 'learning') {
+    return COLORS.practicing;
+  }
+
+  return COLORS.new;
+}
+
+function getTierBackground(
+  tier: MasteryTier,
+): string {
+  if (tier === 'known') {
+    return COLORS.knownBackground;
+  }
+
+  if (tier === 'learning') {
+    return COLORS.practicingBackground;
+  }
+
+  return COLORS.newBackground;
+}
+
 export default function LearningScreen({
   uid,
   onReturnHome,
 }: Props) {
   const [xp, setXp] = useState(0);
 
-  const [knownCounts, setKnownCounts] = useState<
-    Record<string, number>
+  const [wordCounts, setWordCounts] = useState<
+    Record<string, WordCounts>
   >({});
 
-  const [selectedCategory, setSelectedCategory] =
-    useState<Category | null>(null);
+  const [wordTiers, setWordTiers] = useState<
+    Record<string, Record<string, MasteryTier>>
+  >({});
 
-  const [mode, setMode] =
-    useState<'play' | 'view' | null>(null);
+  const [
+    selectedCategory,
+    setSelectedCategory,
+  ] = useState<Category | null>(null);
 
-  // READ XP AND WORD PROGRESS FROM FIREBASE
+  const [mode, setMode] = useState<
+    'play' | 'view' | null
+  >(null);
+
+  // READ XP AND MASTERY FROM FIREBASE
   useEffect(() => {
     const db = getFirestore();
 
@@ -121,31 +191,114 @@ export default function LearningScreen({
             : 0,
         );
 
-        const savedProgress =
+        const savedLearning =
           data?.learningProgress || {};
+
+        const savedQuiz =
+          data?.quizProgress || {};
 
         const nextCounts: Record<
           string,
-          number
+          WordCounts
+        > = {};
+
+        const nextTiers: Record<
+          string,
+          Record<string, MasteryTier>
         > = {};
 
         CATEGORIES.forEach(category => {
-          const count =
-            savedProgress?.[category.id]?.known;
+          const savedWords =
+            savedQuiz?.[category.id]?.words;
 
-          nextCounts[category.id] =
-            typeof count === 'number'
-              ? Math.max(
-                  0,
-                  Math.min(
-                    category.total,
-                    count,
-                  ),
-                )
-              : 0;
+          const tiers: Record<
+            string,
+            MasteryTier
+          > = {};
+
+          // GET EACH WORD'S MASTERY TIER
+          if (
+            savedWords &&
+            typeof savedWords === 'object'
+          ) {
+            Object.entries(savedWords).forEach(
+              ([wordId, value]) => {
+                const raw = value as {
+                  tier?: string;
+                } | null;
+
+                if (
+                  raw?.tier === 'known' ||
+                  raw?.tier === 'learning'
+                ) {
+                  tiers[wordId] = raw.tier;
+                } else {
+                  tiers[wordId] = 'new';
+                }
+              },
+            );
+          }
+
+          nextTiers[category.id] = tiers;
+
+          let known = 0;
+          let practicing = 0;
+
+          const savedWordEntries =
+            Object.values(tiers);
+
+          if (savedWordEntries.length > 0) {
+            // PREFER ACTUAL WORD PROGRESS
+            known = savedWordEntries.filter(
+              tier => tier === 'known',
+            ).length;
+
+            practicing =
+              savedWordEntries.filter(
+                tier => tier === 'learning',
+              ).length;
+          } else {
+            // SUPPORT OLDER SAVED PROGRESS
+            const summary =
+              savedLearning?.[category.id];
+
+            known =
+              typeof summary?.known === 'number'
+                ? summary.known
+                : 0;
+
+            practicing =
+              typeof summary?.learning === 'number'
+                ? summary.learning
+                : 0;
+          }
+
+          known = Math.min(
+            category.total,
+            Math.max(0, known),
+          );
+
+          practicing = Math.min(
+            category.total - known,
+            Math.max(0, practicing),
+          );
+
+          const newWords = Math.max(
+            0,
+            category.total -
+              known -
+              practicing,
+          );
+
+          nextCounts[category.id] = {
+            new: newWords,
+            practicing,
+            known,
+          };
         });
 
-        setKnownCounts(nextCounts);
+        setWordCounts(nextCounts);
+        setWordTiers(nextTiers);
       },
       error => {
         console.log(
@@ -160,7 +313,7 @@ export default function LearningScreen({
 
   const playerLevel = getLevel(xp).level;
 
-  // OPEN A CATEGORY
+  // OPEN PLAY OR VIEW
   const openCategory = (
     category: Category,
     action: 'play' | 'view',
@@ -190,22 +343,61 @@ export default function LearningScreen({
     setMode(action);
   };
 
-  // RETURN TO CATEGORY LIST
+  // BACK TO LEARNING CATEGORIES
   const returnToCategories = () => {
     setSelectedCategory(null);
     setMode(null);
   };
 
-  // DISPLAY CATEGORY CARD
-  const renderCategory = (category: Category) => {
+  // SMALL MASTERY COUNTER
+  const renderProgressBox = (
+    number: number,
+    label: string,
+    color: string,
+    backgroundColor: string,
+  ) => {
+    return (
+      <View
+        style={[
+          styles.progressBox,
+          {backgroundColor},
+        ]}>
+
+        <Text
+          style={[
+            styles.progressNumber,
+            {color},
+          ]}>
+          {number}
+        </Text>
+
+        <Text
+          style={[
+            styles.progressLabel,
+            {color},
+          ]}>
+          {label}
+        </Text>
+      </View>
+    );
+  };
+
+  // CATEGORY CARD
+  const renderCategory = (
+    category: Category,
+  ) => {
     const levelLocked =
       playerLevel < category.unlockLevel;
 
     const unavailable =
       levelLocked || !category.available;
 
-    const known =
-      knownCounts[category.id] ?? 0;
+    const counts =
+      wordCounts[category.id] || {
+        new: category.total,
+        practicing: 0,
+        known: 0,
+      };
 
     return (
       <View
@@ -238,11 +430,36 @@ export default function LearningScreen({
             </Text>
 
             <Text style={styles.knownText}>
-              {known} / {category.total} known
+              {counts.known} / {category.total}
+              {' known'}
             </Text>
 
+            {/* NEW / PRACTICING / KNOWN */}
+            <View style={styles.progressRow}>
+              {renderProgressBox(
+                counts.new,
+                'New',
+                COLORS.new,
+                COLORS.newBackground,
+              )}
+
+              {renderProgressBox(
+                counts.practicing,
+                'Practicing',
+                COLORS.practicing,
+                COLORS.practicingBackground,
+              )}
+
+              {renderProgressBox(
+                counts.known,
+                'Known',
+                COLORS.known,
+                COLORS.knownBackground,
+              )}
+            </View>
+
+            {/* PLAY AND VIEW */}
             <View style={styles.buttonRow}>
-              {/* PLAY REAL QUIZ */}
               <TouchableOpacity
                 style={styles.playButton}
                 onPress={() =>
@@ -265,7 +482,6 @@ export default function LearningScreen({
                 </Text>
               </TouchableOpacity>
 
-              {/* VIEW WORD LIST */}
               <TouchableOpacity
                 style={styles.viewButton}
                 onPress={() =>
@@ -296,7 +512,7 @@ export default function LearningScreen({
     );
   };
 
-  // DISPLAY VOCABULARY WORDS
+  // VOCABULARY LIST WITH MASTERY LEVELS
   const renderWordList = (
     category: Category,
   ) => {
@@ -317,53 +533,79 @@ export default function LearningScreen({
           {category.title}
         </Text>
 
-        <Text
-          style={styles.detailsDescription}>
-          Learn these Ojibwe words and their
-          English meanings.
+        <Text style={styles.detailsDescription}>
+          Practice these Ojibwe words.
+          Their learning status updates
+          after you complete quizzes.
         </Text>
 
         <View style={styles.wordList}>
-          {words.map((word, index) => (
-            <View
-              key={word.id}
-              style={styles.wordRow}>
+          {words.map((word, index) => {
+            const tier: MasteryTier =
+              wordTiers[category.id]?.[
+                word.id
+              ] || 'new';
 
-              <View style={styles.wordNumber}>
-                <Text
-                  style={
-                    styles.wordNumberText
-                  }>
-                  {index + 1}
-                </Text>
+            return (
+              <View
+                key={word.id}
+                style={styles.wordRow}>
+
+                <View style={styles.wordNumber}>
+                  <Text
+                    style={styles.wordNumberText}>
+                    {index + 1}
+                  </Text>
+                </View>
+
+                <View style={styles.wordDetails}>
+                  <Text style={styles.ojibweWord}>
+                    {word.word_ojibwe}
+                  </Text>
+
+                  <Text style={styles.englishWord}>
+                    {word.word_english}
+                  </Text>
+                </View>
+
+                {/* INDIVIDUAL WORD STATUS */}
+                <View
+                  style={[
+                    styles.tierBadge,
+                    {
+                      backgroundColor:
+                        getTierBackground(tier),
+                    },
+                  ]}>
+
+                  <Text
+                    style={[
+                      styles.tierBadgeText,
+                      {
+                        color:
+                          getTierColor(tier),
+                      },
+                    ]}>
+                    {getTierLabel(tier)}
+                  </Text>
+                </View>
               </View>
-
-              <View style={styles.wordDetails}>
-                <Text style={styles.ojibweWord}>
-                  {word.word_ojibwe}
-                </Text>
-
-                <Text style={styles.englishWord}>
-                  {word.word_english}
-                </Text>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         <Text style={styles.previewNote}>
-          Vocabulary from the client's
-          reference document. Play a quiz
-          to save your word mastery.
-          Audio will be added after
-          approved recordings are available.
+          New means the word has not yet
+          reached Practicing. Keep answering
+          correctly to move words toward
+          Known. Progress is saved after
+          completing a quiz.
         </Text>
       </ScrollView>
     );
   };
 
-  // OPEN THE REAL QUIZ
-  // NO EXTRA LEARNING HEADER
+  // REAL QUIZ SCREEN
   if (
     selectedCategory &&
     mode === 'play' &&
@@ -381,12 +623,11 @@ export default function LearningScreen({
     );
   }
 
-  // MAIN LEARNING PAGE
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* DARK GREEN HEADER */}
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -410,7 +651,7 @@ export default function LearningScreen({
         </Text>
       </View>
 
-      {/* CATEGORY OR WORD LIST */}
+      {/* MAIN PAGE OR WORD LIST */}
       {selectedCategory &&
       mode === 'view' ? (
         renderWordList(selectedCategory)
@@ -423,10 +664,8 @@ export default function LearningScreen({
           showsVerticalScrollIndicator={false}>
 
           {CATEGORIES.map(renderCategory)}
-
         </ScrollView>
       )}
-
     </SafeAreaView>
   );
 }
@@ -481,22 +720,50 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderWidth: 1,
     borderRadius: 9,
-    paddingHorizontal: 19,
-    paddingVertical: 12,
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    marginBottom: 13,
   },
 
   categoryTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.brown,
+    color: COLORS.green,
   },
 
   knownText: {
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.brown,
     marginTop: 4,
-    marginBottom: 7,
+    marginBottom: 12,
+  },
+
+  // THREE PROGRESS BOXES
+  progressRow: {
+    flexDirection: 'row',
+    gap: 7,
+    marginBottom: 13,
+  },
+
+  progressBox: {
+    flex: 1,
+    borderRadius: 9,
+    paddingVertical: 10,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 62,
+  },
+
+  progressNumber: {
+    fontSize: 21,
+    fontWeight: 'bold',
+  },
+
+  progressLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginTop: 3,
   },
 
   buttonRow: {
@@ -542,7 +809,8 @@ const styles = StyleSheet.create({
 
   buttonLabel: {
     color: COLORS.teal,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '600',
     marginTop: 1,
   },
 
@@ -573,6 +841,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  // WORD LIST
   detailsContent: {
     padding: 18,
     paddingBottom: 35,
@@ -602,7 +871,8 @@ const styles = StyleSheet.create({
   wordRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 15,
     backgroundColor: COLORS.cream2,
     borderBottomColor: COLORS.border,
     borderBottomWidth: 1,
@@ -615,7 +885,7 @@ const styles = StyleSheet.create({
     width: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 10,
   },
 
   wordNumberText: {
@@ -626,12 +896,13 @@ const styles = StyleSheet.create({
 
   wordDetails: {
     flex: 1,
+    paddingRight: 8,
   },
 
   ojibweWord: {
     color: COLORS.green,
     fontWeight: 'bold',
-    fontSize: 17,
+    fontSize: 16,
   },
 
   englishWord: {
@@ -640,10 +911,24 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  // WORD STATUS BADGE
+  tierBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  tierBadgeText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+
   previewNote: {
     color: COLORS.brown,
-    fontSize: 12,
-    lineHeight: 19,
+    fontSize: 13,
+    lineHeight: 20,
     marginTop: 16,
   },
 });
