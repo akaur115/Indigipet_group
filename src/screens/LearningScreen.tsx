@@ -2,7 +2,6 @@
 import React, {useEffect, useState} from 'react';
 
 import {
-  ActivityIndicator,
   Alert,
   SafeAreaView,
   ScrollView,
@@ -19,10 +18,9 @@ import {
   onSnapshot,
 } from '@react-native-firebase/firestore';
 
-import {
-  completeGameSession,
-  getLevel,
-} from '../services/gameService';
+import {getLevel} from '../services/gameService';
+import {QUIZ_WORDS} from '../data/quizWords';
+import QuizScreen from './QuizScreen';
 
 type Props = {
   uid: string;
@@ -43,11 +41,6 @@ type Category = {
   available: boolean;
 };
 
-type Word = {
-  english: string;
-  ojibwe: string;
-};
-
 const COLORS = {
   cream: '#FFFBEF',
   cream2: '#FFFBF0',
@@ -56,21 +49,20 @@ const COLORS = {
   tealShadow: '#08797A',
   brown: '#6E6151',
   border: '#E5DAC8',
-  orange: '#EC6E00',
 };
 
 const CATEGORIES: Category[] = [
   {
     id: 'numbers',
     title: 'Numbers',
-    total: 10,
+    total: QUIZ_WORDS.numbers.length,
     unlockLevel: 1,
     available: true,
   },
   {
     id: 'food',
     title: 'Food',
-    total: 10,
+    total: QUIZ_WORDS.food.length,
     unlockLevel: 1,
     available: true,
   },
@@ -90,36 +82,6 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-// Verified sample vocabulary from the client documents.
-// These lists are previews until the full vocabulary
-// database, audio, and mastery system are connected.
-const WORDS: Record<CategoryId, Word[]> = {
-  numbers: [
-    {english: 'One', ojibwe: 'bezhig'},
-    {english: 'Two', ojibwe: 'niizh'},
-    {english: 'Three', ojibwe: 'niswi'},
-    {english: 'Four', ojibwe: 'niiwin'},
-    {english: 'Five', ojibwe: 'naanan'},
-    {english: 'Six', ojibwe: 'ningodwaaswi'},
-    {english: 'Seven', ojibwe: 'niizhwaaswi'},
-    {english: 'Eight', ojibwe: 'nishwaaswi'},
-    {english: 'Nine', ojibwe: 'zhaangaswi'},
-  ],
-  food: [
-    {english: 'Bread', ojibwe: 'Bakwezhigan'},
-    {english: 'Cherry', ojibwe: 'Ookwemin'},
-    {english: 'Cookie', ojibwe: 'Bakwezhiganenz'},
-    {english: 'Corn', ojibwe: 'Mandaamin'},
-    {english: 'Meat', ojibwe: 'Wiiyaas'},
-    {english: 'Milk', ojibwe: 'Doodooshaaboo'},
-    {english: 'Raspberry', ojibwe: 'Miskomin'},
-    {english: 'Strawberry', ojibwe: 'Ode’min'},
-    {english: 'Wild Rice', ojibwe: 'Manoomin'},
-  ],
-  animals: [],
-  winter: [],
-};
-
 export default function LearningScreen({
   uid,
   onReturnHome,
@@ -136,13 +98,15 @@ export default function LearningScreen({
   const [mode, setMode] =
     useState<'play' | 'view' | null>(null);
 
-  const [busy, setBusy] = useState(false);
-
-  // Read XP and any existing learning progress.
-  // Never overwrite Firebase data from this screen.
+  // READ XP AND WORD PROGRESS FROM FIREBASE
   useEffect(() => {
     const db = getFirestore();
-    const reference = doc(db, 'users', uid);
+
+    const reference = doc(
+      db,
+      'users',
+      uid,
+    );
 
     const unsubscribe = onSnapshot(
       reference,
@@ -160,7 +124,10 @@ export default function LearningScreen({
         const savedProgress =
           data?.learningProgress || {};
 
-        const nextCounts: Record<string, number> = {};
+        const nextCounts: Record<
+          string,
+          number
+        > = {};
 
         CATEGORIES.forEach(category => {
           const count =
@@ -170,7 +137,10 @@ export default function LearningScreen({
             typeof count === 'number'
               ? Math.max(
                   0,
-                  Math.min(category.total, count),
+                  Math.min(
+                    category.total,
+                    count,
+                  ),
                 )
               : 0;
         });
@@ -190,6 +160,7 @@ export default function LearningScreen({
 
   const playerLevel = getLevel(xp).level;
 
+  // OPEN A CATEGORY
   const openCategory = (
     category: Category,
     action: 'play' | 'view',
@@ -197,16 +168,21 @@ export default function LearningScreen({
     if (playerLevel < category.unlockLevel) {
       Alert.alert(
         'Category Locked',
-        `Reach XP level ${category.unlockLevel} to unlock this category.`,
+        'Reach XP level ' +
+          String(category.unlockLevel) +
+          ' to unlock this category.',
       );
+
       return;
     }
 
     if (!category.available) {
       Alert.alert(
         'Coming Soon',
-        `${category.title} is planned for a future update.`,
+        category.title +
+          ' is planned for a future update.',
       );
+
       return;
     }
 
@@ -214,43 +190,13 @@ export default function LearningScreen({
     setMode(action);
   };
 
+  // RETURN TO CATEGORY LIST
   const returnToCategories = () => {
     setSelectedCategory(null);
     setMode(null);
   };
 
-  // Keep the existing development reward test.
-  // This is NOT a real completed lesson.
-  const testRewards = async () => {
-    if (busy) {
-      return;
-    }
-
-    setBusy(true);
-
-    try {
-      await completeGameSession(uid, 7, 7);
-
-      Alert.alert(
-        'Development Test Complete',
-        'Saved +70 XP, +25 coins, and +30% friendship.',
-        [
-          {
-            text: 'Return Home',
-            onPress: onReturnHome,
-          },
-        ],
-      );
-    } catch (error: any) {
-      Alert.alert(
-        'Test Failed',
-        error?.message || 'Please try again.',
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  // DISPLAY CATEGORY CARD
   const renderCategory = (category: Category) => {
     const levelLocked =
       playerLevel < category.unlockLevel;
@@ -258,7 +204,8 @@ export default function LearningScreen({
     const unavailable =
       levelLocked || !category.available;
 
-    const known = knownCounts[category.id] ?? 0;
+    const known =
+      knownCounts[category.id] ?? 0;
 
     return (
       <View
@@ -278,7 +225,8 @@ export default function LearningScreen({
 
               <Text style={styles.lockedSubtitle}>
                 {levelLocked
-                  ? `Unlocks at XP level ${category.unlockLevel}`
+                  ? 'Unlocks at XP level ' +
+                    String(category.unlockLevel)
                   : 'Coming soon'}
               </Text>
             </View>
@@ -294,13 +242,19 @@ export default function LearningScreen({
             </Text>
 
             <View style={styles.buttonRow}>
+              {/* PLAY REAL QUIZ */}
               <TouchableOpacity
                 style={styles.playButton}
                 onPress={() =>
-                  openCategory(category, 'play')
+                  openCategory(
+                    category,
+                    'play',
+                  )
                 }
                 accessibilityRole="button"
-                accessibilityLabel={`Play ${category.title}`}>
+                accessibilityLabel={
+                  'Play ' + category.title
+                }>
 
                 <Text style={styles.playIcon}>
                   ▶
@@ -311,13 +265,21 @@ export default function LearningScreen({
                 </Text>
               </TouchableOpacity>
 
+              {/* VIEW WORD LIST */}
               <TouchableOpacity
                 style={styles.viewButton}
                 onPress={() =>
-                  openCategory(category, 'view')
+                  openCategory(
+                    category,
+                    'view',
+                  )
                 }
                 accessibilityRole="button"
-                accessibilityLabel={`View ${category.title} words`}>
+                accessibilityLabel={
+                  'View ' +
+                  category.title +
+                  ' words'
+                }>
 
                 <Text style={styles.viewIcon}>
                   ▣
@@ -334,19 +296,29 @@ export default function LearningScreen({
     );
   };
 
-  const renderWordList = (category: Category) => {
-    const words = WORDS[category.id];
+  // DISPLAY VOCABULARY WORDS
+  const renderWordList = (
+    category: Category,
+  ) => {
+    const words =
+      category.id === 'numbers' ||
+      category.id === 'food'
+        ? QUIZ_WORDS[category.id]
+        : [];
 
     return (
       <ScrollView
-        contentContainerStyle={styles.detailsContent}
+        contentContainerStyle={
+          styles.detailsContent
+        }
         showsVerticalScrollIndicator={false}>
 
         <Text style={styles.detailsTitle}>
           {category.title}
         </Text>
 
-        <Text style={styles.detailsDescription}>
+        <Text
+          style={styles.detailsDescription}>
           Learn these Ojibwe words and their
           English meanings.
         </Text>
@@ -354,22 +326,25 @@ export default function LearningScreen({
         <View style={styles.wordList}>
           {words.map((word, index) => (
             <View
-              key={`${category.id}-${index}`}
+              key={word.id}
               style={styles.wordRow}>
 
               <View style={styles.wordNumber}>
-                <Text style={styles.wordNumberText}>
+                <Text
+                  style={
+                    styles.wordNumberText
+                  }>
                   {index + 1}
                 </Text>
               </View>
 
               <View style={styles.wordDetails}>
                 <Text style={styles.ojibweWord}>
-                  {word.ojibwe}
+                  {word.word_ojibwe}
                 </Text>
 
                 <Text style={styles.englishWord}>
-                  {word.english}
+                  {word.word_english}
                 </Text>
               </View>
             </View>
@@ -377,75 +352,36 @@ export default function LearningScreen({
         </View>
 
         <Text style={styles.previewNote}>
-          Preview vocabulary from the client
-          reference document. The complete word
-          library, audio, and mastery tracking
-          will be connected later.
+          Vocabulary from the client's
+          reference document. Play a quiz
+          to save your word mastery.
+          Audio will be added after
+          approved recordings are available.
         </Text>
       </ScrollView>
     );
   };
 
-  const renderPlayPreview = (category: Category) => (
-    <ScrollView
-      contentContainerStyle={styles.detailsContent}>
+  // OPEN THE REAL QUIZ
+  // NO EXTRA LEARNING HEADER
+  if (
+    selectedCategory &&
+    mode === 'play' &&
+    (
+      selectedCategory.id === 'numbers' ||
+      selectedCategory.id === 'food'
+    )
+  ) {
+    return (
+      <QuizScreen
+        uid={uid}
+        categoryId={selectedCategory.id}
+        onExit={returnToCategories}
+      />
+    );
+  }
 
-      <Text style={styles.detailsTitle}>
-        {category.title} Game
-      </Text>
-
-      <View style={styles.gameCard}>
-        <Text style={styles.gameIcon}>
-          📖
-        </Text>
-
-        <Text style={styles.gameTitle}>
-          Learn with Esiban!
-        </Text>
-
-        <Text style={styles.gameDescription}>
-          This category will have a 7-question
-          multiple-choice game using Ojibwe
-          vocabulary.
-        </Text>
-
-        <Text style={styles.gameDescription}>
-          Completing a real game will earn XP,
-          coins, and friendship with Esiban.
-        </Text>
-
-        <Text style={styles.comingSoon}>
-          Game questions are being connected.
-        </Text>
-
-        {__DEV__ && (
-          <TouchableOpacity
-            onPress={testRewards}
-            disabled={busy}
-            style={styles.developerButton}>
-
-            {busy ? (
-              <ActivityIndicator
-                color="#FFFFFF"
-              />
-            ) : (
-              <Text style={styles.developerText}>
-                Developer Test: Simulate 7/7
-              </Text>
-            )}
-          </TouchableOpacity>
-        )}
-
-        {__DEV__ && (
-          <Text style={styles.developerNote}>
-            Testing only. This button gives
-            rewards without playing a lesson.
-          </Text>
-        )}
-      </View>
-    </ScrollView>
-  );
-
+  // MAIN LEARNING PAGE
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -474,21 +410,23 @@ export default function LearningScreen({
         </Text>
       </View>
 
-      {/* MAIN PAGE OR CATEGORY DETAILS */}
-      {selectedCategory && mode === 'view' ? (
+      {/* CATEGORY OR WORD LIST */}
+      {selectedCategory &&
+      mode === 'view' ? (
         renderWordList(selectedCategory)
-      ) : selectedCategory && mode === 'play' ? (
-        renderPlayPreview(selectedCategory)
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={
+            styles.content
+          }
           showsVerticalScrollIndicator={false}>
 
           {CATEGORIES.map(renderCategory)}
 
         </ScrollView>
       )}
+
     </SafeAreaView>
   );
 }
@@ -694,7 +632,6 @@ const styles = StyleSheet.create({
     color: COLORS.green,
     fontWeight: 'bold',
     fontSize: 17,
-
   },
 
   englishWord: {
@@ -708,64 +645,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 19,
     marginTop: 16,
-  },
-
-  gameCard: {
-    borderRadius: 13,
-    padding: 22,
-    backgroundColor: COLORS.cream2,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-  },
-
-  gameIcon: {
-    fontSize: 46,
-    marginBottom: 13,
-  },
-
-  gameTitle: {
-    color: COLORS.green,
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-
-  gameDescription: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.brown,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-
-  comingSoon: {
-    color: COLORS.tealShadow,
-    fontWeight: 'bold',
-    marginTop: 12,
-    textAlign: 'center',
-  },
-
-  developerButton: {
-    backgroundColor: COLORS.green,
-    borderRadius: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    marginTop: 24,
-    width: '100%',
-    alignItems: 'center',
-  },
-
-  developerText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-
-  developerNote: {
-    color: COLORS.brown,
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 10,
   },
 });
