@@ -5,9 +5,11 @@ import {
   type QuizWord,
 } from '../data/quizWords';
 
+// CLIENT QUIZ REQUIREMENTS
 export const QUESTIONS_PER_SESSION = 7;
 export const DAILY_NEW_WORD_CAP = 5;
 
+// WORD MASTERY LEVELS
 export type MasteryTier =
   | 'new'
   | 'learning'
@@ -34,6 +36,7 @@ export type AnswerEvent = {
   correct: boolean;
 };
 
+// EMPTY PROGRESS FOR NEW USERS
 export function emptyProgress():
   CategoryQuizProgress {
   return {
@@ -42,6 +45,7 @@ export function emptyProgress():
   };
 }
 
+// GET CURRENT DATE
 export function localDay(
   timestamp: number,
 ): string {
@@ -56,45 +60,59 @@ export function localDay(
   );
 }
 
-// CHOOSE NEW AND REVIEW WORDS
+// SELECT WORDS AVAILABLE FOR THE QUIZ
 export function sessionPool(
   category: QuizCategoryId,
   progress: CategoryQuizProgress,
   now: number,
 ): QuizWord[] {
   const vocabulary = QUIZ_WORDS[category];
+
   const today = localDay(now);
 
-  const introducedToday = Object.values(
-    progress.words,
-  ).filter(
-    item => item.introducedOn === today,
+  // COUNT HOW MANY NEW WORDS
+  // WERE INTRODUCED TODAY
+  const introducedToday = vocabulary.filter(
+    word =>
+      progress.words[word.id]?.introducedOn ===
+      today,
   ).length;
 
+  // MAXIMUM FIVE NEW WORDS PER DAY
   const newRemaining = Math.max(
     0,
     DAILY_NEW_WORD_CAP - introducedToday,
   );
 
-  const due = vocabulary.filter(w => {
-    const memory = progress.words[w.id];
+  // WORDS READY FOR REVIEW
+  const due = vocabulary.filter(word => {
+    const memory = progress.words[word.id];
 
     return (
-      memory &&
+      memory !== undefined &&
       memory.nextReviewAt <= now
     );
   });
 
+  // NEW WORDS NOT PRACTICED BEFORE
   const fresh = vocabulary
-    .filter(w => !progress.words[w.id])
+    .filter(
+      word => !progress.words[word.id],
+    )
     .slice(0, newRemaining);
 
+  // WORDS ALREADY LEARNED
+  // BUT NOT CURRENTLY DUE
   const otherSeen = vocabulary.filter(
-    w =>
-      Boolean(progress.words[w.id]) &&
-      !due.some(d => d.id === w.id),
+    word =>
+      Boolean(progress.words[word.id]) &&
+      !due.some(
+        dueWord =>
+          dueWord.id === word.id,
+      ),
   );
 
+  // COMBINE REVIEW AND NEW WORDS
   return [
     ...due,
     ...fresh,
@@ -102,7 +120,8 @@ export function sessionPool(
   ];
 }
 
-// CHOOSE THE NEXT WORD
+// SELECT THE NEXT QUIZ QUESTION
+// FIXED TO PREVENT EXCESSIVE REPETITION
 export function pickQuestionWord(
   pool: QuizWord[],
   answers: AnswerEvent[],
@@ -114,51 +133,87 @@ export function pickQuestionWord(
     );
   }
 
+  // AVOID THE SAME WORD TWICE IN A ROW
   const candidates = pool.filter(
-    w => w.id !== lastWordId,
+    word =>
+      word.id !== lastWordId,
   );
 
-  const list = candidates.length
-    ? candidates
-    : pool;
+  const available =
+    candidates.length > 0
+      ? candidates
+      : pool;
 
-  const history = (id: string) =>
+  // GET PREVIOUS ANSWERS FOR A WORD
+  const history = (wordId: string) =>
     answers.filter(
-      answer => answer.wordId === id,
+      answer =>
+        answer.wordId === wordId,
     );
 
-  // INCORRECT WORDS RETURN SOONER
-  const needsRetry = list.filter(w => {
-    const h = history(w.id);
-
-    return (
-      h.length > 0 &&
-      !h[h.length - 1].correct
-    );
-  });
-
-  if (needsRetry.length) {
-    return needsRetry[0];
-  }
-
-  // ASK WORDS NOT YET USED IN THIS ROUND
-  const unseenInRound = list.find(
-    w => history(w.id).length === 0,
+  // FIND WORDS NOT ASKED THIS SESSION
+  const unseen = available.filter(
+    word =>
+      history(word.id).length === 0,
   );
 
-  if (unseenInRound) {
-    return unseenInRound;
+  // FIND WORDS THAT NEED MORE PRACTICE
+  const incorrect = available.filter(
+    word => {
+      const previous = history(word.id);
+
+      if (previous.length === 0) {
+        return false;
+      }
+
+      return !previous[
+        previous.length - 1
+      ].correct;
+    },
+  );
+
+  // NUMBER OF QUESTIONS LEFT
+  const remaining =
+    QUESTIONS_PER_SESSION -
+    answers.length;
+
+  // SHOW UNSEEN WORDS BEFORE
+  // RUNNING OUT OF QUESTION SLOTS
+  if (
+    unseen.length > 0 &&
+    remaining <= unseen.length
+  ) {
+    return unseen[0];
   }
 
-  // REPEAT THE LEAST PRACTICED WORD
-  return [...list].sort(
+  // RETRY AN INCORRECTLY ANSWERED WORD
+  if (incorrect.length > 0) {
+    const sorted = [...incorrect].sort(
+      (a, b) =>
+        history(a.id).length -
+        history(b.id).length,
+    );
+
+    return sorted[0];
+  }
+
+  // INTRODUCE A WORD NOT YET ASKED
+  if (unseen.length > 0) {
+    return unseen[0];
+  }
+
+  // ALL AVAILABLE WORDS WERE ASKED
+  // REPEAT THE LEAST PRACTICED ONE
+  const sorted = [...available].sort(
     (a, b) =>
       history(a.id).length -
       history(b.id).length,
-  )[0];
+  );
+
+  return sorted[0];
 }
 
-// SHUFFLE ANSWER OPTIONS
+// SHUFFLE THE ANSWER OPTIONS
 export function shuffle<T>(
   items: readonly T[],
 ): T[] {
@@ -182,38 +237,45 @@ export function shuffle<T>(
   return result;
 }
 
-// FOUR MULTIPLE-CHOICE ANSWERS
+// GENERATE FOUR MULTIPLE-CHOICE OPTIONS
 export function answerOptions(
   word: QuizWord,
 ): QuizWord[] {
   const vocabulary =
     QUIZ_WORDS[word.category];
 
+  // PICK THREE INCORRECT ANSWERS
   const distractors = shuffle(
     vocabulary.filter(
-      w => w.id !== word.id,
+      item =>
+        item.id !== word.id,
     ),
   ).slice(0, 3);
 
+  // INCLUDE ONE CORRECT ANSWER
   return shuffle([
     word,
     ...distractors,
   ]);
 }
 
-// UPDATE WORD LEARNING PROGRESS
+// UPDATE LEARNING PROGRESS
+// AFTER EACH ANSWER
 export function recordAnswer(
   progress: CategoryQuizProgress,
   wordId: string,
   correct: boolean,
   now: number,
 ): CategoryQuizProgress {
-  const before = progress.words[wordId];
+  const before =
+    progress.words[wordId];
 
+  // CORRECT ANSWERS IN A ROW
   const streak = correct
     ? (before?.streak ?? 0) + 1
     : 0;
 
+  // MASTERY TIERS
   const tier: MasteryTier =
     streak >= 5
       ? 'known'
@@ -224,6 +286,7 @@ export function recordAnswer(
   const minute = 60_000;
   const day = 24 * 60 * minute;
 
+  // SPACED REPETITION REVIEW TIME
   const reviewDelay = !correct
     ? 0
     : streak === 1
@@ -262,31 +325,36 @@ export function recordAnswer(
   };
 }
 
-// XP, COINS AND FRIENDSHIP
+// CALCULATE REWARDS
+// BASED ON CLIENT REQUIREMENTS
 export function calculateRewards(
   correctAnswers: number,
 ) {
   if (
     !Number.isInteger(correctAnswers) ||
     correctAnswers < 0 ||
-    correctAnswers > 7
+    correctAnswers > QUESTIONS_PER_SESSION
   ) {
     throw new Error(
       'Quiz score must be between 0 and 7.',
     );
   }
 
+  const xp =
+    correctAnswers * 10;
+
+  const coins =
+    correctAnswers * 3 +
+    (correctAnswers === 7 ? 4 : 0);
+
   return {
-    xp: correctAnswers * 10,
-
-    coins:
-      correctAnswers * 3 +
-      (correctAnswers === 7 ? 4 : 0),
-
+    xp,
+    coins,
     friendship: 30,
   };
 }
 
+// DISPLAY THE WORD MASTERY LEVEL
 export function tierLabel(
   tier: MasteryTier,
 ): string {
