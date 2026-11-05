@@ -1,5 +1,7 @@
-
-import React, {useEffect, useState} from 'react';
+import React, {
+  useEffect,
+  useState,
+} from 'react';
 
 import {
   ActivityIndicator,
@@ -21,13 +23,14 @@ import {
   onSnapshot,
 } from '@react-native-firebase/firestore';
 
-import {getCurrentUser} from '../services/authService';
+import {
+  getCurrentUser,
+} from '../services/authService';
 
 import LegalDocumentScreen from './LegalDocumentScreen';
 
 import {
   PRIVACY_POLICY,
-  TERMS_OF_SERVICE,
 } from './legalDocuments';
 
 type Props = {
@@ -43,9 +46,8 @@ type SectionId =
   | 'about'
   | 'legal';
 
-type LegalPage = 'privacy' | 'terms' | null;
-
-type SectionsState = Record<SectionId, boolean>;
+type SectionsState =
+  Record<SectionId, boolean>;
 
 const COLORS = {
   darkGreen: '#035643',
@@ -75,8 +77,8 @@ export default function SettingsScreen({
       legal: false,
     });
 
-  const [legalPage, setLegalPage] =
-    useState<LegalPage>(null);
+  const [showPrivacy, setShowPrivacy] =
+    useState(false);
 
   const [
     notificationsEnabled,
@@ -92,7 +94,6 @@ export default function SettingsScreen({
   const [savingLogout, setSavingLogout] =
     useState(false);
 
-  // LOAD ACCOUNT INFORMATION FROM FIREBASE
   useEffect(() => {
     const user = getCurrentUser();
 
@@ -102,21 +103,25 @@ export default function SettingsScreen({
 
     const db = getFirestore();
 
-    const userReference = doc(
+    const reference = doc(
       db,
       'users',
       user.uid,
     );
 
     const unsubscribe = onSnapshot(
-      userReference,
+      reference,
       snapshot => {
         const data = snapshot.data();
 
         if (data?.username) {
-          setUsername(String(data.username));
+          setUsername(
+            String(data.username),
+          );
         } else if (data?.name) {
-          setUsername(String(data.name));
+          setUsername(
+            String(data.name),
+          );
         }
       },
       error => {
@@ -130,11 +135,10 @@ export default function SettingsScreen({
     return unsubscribe;
   }, []);
 
-  // OPEN OR CLOSE SETTINGS DROPDOWNS
-  const toggleSection = (section: SectionId) => {
+  const toggleSection = (id: SectionId) => {
     setSections(previous => ({
       ...previous,
-      [section]: !previous[section],
+      [id]: !previous[id],
     }));
   };
 
@@ -142,7 +146,7 @@ export default function SettingsScreen({
   const handleSignOut = () => {
     Alert.alert(
       'Sign Out',
-      'Are you sure you want to sign out of IndigiPet?',
+      'Are you sure you want to sign out?',
       [
         {
           text: 'Cancel',
@@ -159,10 +163,10 @@ export default function SettingsScreen({
 
             try {
               await onLogout();
-            } catch (error: any) {
+            } catch (e: any) {
               Alert.alert(
                 'Sign Out Failed',
-                error?.message ||
+                e?.message ||
                   'Please try again.',
               );
             } finally {
@@ -174,12 +178,11 @@ export default function SettingsScreen({
     );
   };
 
-  // REQUEST ACCOUNT DELETION BY EMAIL
-  // DOES NOT DELETE FIREBASE DATA AUTOMATICALLY
+  // EMAIL ACCOUNT DELETION REQUEST
   const handleDeleteAccount = () => {
     Alert.alert(
       'Request Account Deletion',
-      'The Privacy Policy says you may request permanent account deletion by emailing support@giigidomikinaak.ca from your account email address. Your progress, pet and coins will be removed when the request is processed. This button does not immediately delete your account.',
+      'Contact support to request permanent deletion of your account and saved data. This does not delete your account immediately.',
       [
         {
           text: 'Cancel',
@@ -188,29 +191,33 @@ export default function SettingsScreen({
         {
           text: 'Email Support',
           onPress: async () => {
-            const subject = encodeURIComponent(
-              'IndigiPet Account Deletion Request',
-            );
+            const subject =
+              encodeURIComponent(
+                'IndigiPet Account Deletion Request',
+              );
 
-            const body = encodeURIComponent(
-              'Hello,\n\n' +
-              'I would like to request deletion of my IndigiPet account and associated data.\n\n' +
-              'Account email: ' +
-              (email || '[enter your account email]') +
-              '\n\nThank you.',
-            );
+            const body =
+              encodeURIComponent(
+                'Hello,\n\n' +
+                'Please delete my IndigiPet account and associated data.\n\n' +
+                'Account email: ' +
+                email +
+                '\n\nThank you.',
+              );
 
-            const mailto =
+            const url =
               'mailto:support@giigidomikinaak.ca' +
-              '?subject=' + subject +
-              '&body=' + body;
+              '?subject=' +
+              subject +
+              '&body=' +
+              body;
 
             try {
-              await Linking.openURL(mailto);
+              await Linking.openURL(url);
             } catch {
               Alert.alert(
-                'Email App Not Available',
-                'Please send your request from your account email to support@giigidomikinaak.ca.',
+                'Email App Unavailable',
+                'Please email support@giigidomikinaak.ca.',
               );
             }
           },
@@ -219,7 +226,6 @@ export default function SettingsScreen({
     );
   };
 
-  // DROPDOWN HEADER
   const renderHeader = (
     id: SectionId,
     title: string,
@@ -239,20 +245,17 @@ export default function SettingsScreen({
       <Text style={styles.chevron}>
         {sections[id] ? '⌃' : '⌄'}
       </Text>
-
     </TouchableOpacity>
   );
 
-  // OPEN CLIENT LEGAL DOCUMENT
-  if (legalPage) {
+  // PRIVACY POLICY ONLY
+  if (showPrivacy) {
     return (
       <LegalDocumentScreen
-        document={
-          legalPage === 'privacy'
-            ? PRIVACY_POLICY
-            : TERMS_OF_SERVICE
+        document={PRIVACY_POLICY}
+        onBack={() =>
+          setShowPrivacy(false)
         }
-        onBack={() => setLegalPage(null)}
       />
     );
   }
@@ -261,13 +264,11 @@ export default function SettingsScreen({
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={onReturnHome}
-          accessibilityRole="button"
-          accessibilityLabel="Return to Home">
+          accessibilityRole="button">
 
           <Text style={styles.backArrow}>
             ‹
@@ -288,7 +289,10 @@ export default function SettingsScreen({
 
         {/* ACCOUNT */}
         <View style={styles.sectionCard}>
-          {renderHeader('account', 'Account')}
+          {renderHeader(
+            'account',
+            'Account',
+          )}
 
           {sections.account && (
             <View style={styles.sectionBody}>
@@ -313,8 +317,8 @@ export default function SettingsScreen({
           {sections.notifications && (
             <View style={styles.sectionBody}>
               <Text style={styles.description}>
-                Esiban will let you know when
-                he's hungry or misses you.
+                Esiban will let you know
+                when he's hungry or misses you.
               </Text>
 
               <View style={styles.switchRow}>
@@ -328,7 +332,6 @@ export default function SettingsScreen({
                     true: COLORS.green,
                   }}
                   thumbColor="#FFFFFF"
-                  accessibilityLabel="Pet notifications"
                 />
 
                 <Text style={styles.switchText}>
@@ -339,7 +342,7 @@ export default function SettingsScreen({
               </View>
 
               <Text style={styles.previewNote}>
-                Notification delivery will be
+                Notifications will be
                 connected in a future update.
               </Text>
             </View>
@@ -348,35 +351,41 @@ export default function SettingsScreen({
 
         {/* SOUND */}
         <View style={styles.sectionCard}>
-          {renderHeader('sound', 'Sound')}
+          {renderHeader(
+            'sound',
+            'Sound',
+          )}
 
           {sections.sound && (
             <View style={styles.sectionBody}>
               <Text style={styles.description}>
                 Enable or disable voice-over
-                for learning activities.
+                for lessons.
               </Text>
 
               <View style={styles.switchRow}>
                 <Switch
                   value={soundEnabled}
-                  onValueChange={setSoundEnabled}
+                  onValueChange={
+                    setSoundEnabled
+                  }
                   trackColor={{
                     false: '#D8D0C5',
                     true: COLORS.green,
                   }}
                   thumbColor="#FFFFFF"
-                  accessibilityLabel="Voice-over sound"
                 />
 
                 <Text style={styles.switchText}>
-                  {soundEnabled ? 'On' : 'Off'}
+                  {soundEnabled
+                    ? 'On'
+                    : 'Off'}
                 </Text>
               </View>
 
               <Text style={styles.previewNote}>
-                Voice-over control will work
-                when lesson audio is added.
+                Audio controls will work
+                when lesson recordings are added.
               </Text>
             </View>
           )}
@@ -384,7 +393,10 @@ export default function SettingsScreen({
 
         {/* ABOUT */}
         <View style={styles.sectionCard}>
-          {renderHeader('about', 'About')}
+          {renderHeader(
+            'about',
+            'About',
+          )}
 
           {sections.about && (
             <View style={styles.sectionBody}>
@@ -397,24 +409,25 @@ export default function SettingsScreen({
               </Text>
 
               <Text style={styles.description}>
-                Approved Ojibwe language
-                contributor credits will
-                appear here.
+                Approved language contributor
+                credits will appear here.
               </Text>
             </View>
           )}
         </View>
 
-        {/* LEGAL AND HELP */}
+        {/* PRIVACY POLICY */}
         <View style={styles.sectionCard}>
-          {renderHeader('legal', 'Legal & Help')}
+          {renderHeader(
+            'legal',
+            'Privacy & Help',
+          )}
 
           {sections.legal && (
             <View style={styles.sectionBody}>
-
               <TouchableOpacity
                 onPress={() =>
-                  setLegalPage('privacy')
+                  setShowPrivacy(true)
                 }
                 accessibilityRole="button">
 
@@ -422,18 +435,6 @@ export default function SettingsScreen({
                   Privacy Policy  ›
                 </Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() =>
-                  setLegalPage('terms')
-                }
-                accessibilityRole="button">
-
-                <Text style={styles.legalLink}>
-                  Terms of Service  ›
-                </Text>
-              </TouchableOpacity>
-
             </View>
           )}
         </View>
@@ -442,11 +443,12 @@ export default function SettingsScreen({
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
-          disabled={savingLogout}
-          accessibilityRole="button">
+          disabled={savingLogout}>
 
           {savingLogout ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator
+              color="#FFFFFF"
+            />
           ) : (
             <Text style={styles.actionButtonText}>
               Sign Out
@@ -457,8 +459,7 @@ export default function SettingsScreen({
         {/* DELETE ACCOUNT */}
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={handleDeleteAccount}
-          accessibilityRole="button">
+          onPress={handleDeleteAccount}>
 
           <Text style={styles.actionButtonText}>
             Delete Account
@@ -475,6 +476,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.cream,
   },
+
   header: {
     backgroundColor: COLORS.darkGreen,
     minHeight: 82,
@@ -483,30 +485,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 17,
   },
+
   backButton: {
     width: 38,
     height: 44,
     justifyContent: 'center',
   },
+
   backArrow: {
     fontSize: 34,
     color: '#FFFFFF',
-    fontWeight: '400',
   },
+
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 26,
     fontWeight: 'bold',
     marginLeft: 7,
   },
+
   scroll: {
     flex: 1,
   },
+
   scrollContent: {
     paddingHorizontal: 17,
     paddingTop: 18,
     paddingBottom: 35,
   },
+
   sectionCard: {
     backgroundColor: COLORS.cream2,
     borderColor: COLORS.border,
@@ -515,6 +522,7 @@ const styles = StyleSheet.create({
     marginBottom: 13,
     overflow: 'hidden',
   },
+
   sectionHeader: {
     minHeight: 53,
     paddingHorizontal: 16,
@@ -523,23 +531,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+
   sectionTitle: {
     color: COLORS.text,
     fontSize: 19,
     fontWeight: 'bold',
     flex: 1,
   },
+
   chevron: {
     color: COLORS.text,
     fontSize: 27,
     fontWeight: 'bold',
-    marginLeft: 10,
   },
+
   sectionBody: {
     paddingHorizontal: 16,
     paddingBottom: 17,
     paddingTop: 3,
   },
+
   detailText: {
     color: COLORS.text,
     fontSize: 16,
@@ -547,6 +558,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginTop: 5,
   },
+
   description: {
     color: COLORS.secondaryText,
     fontSize: 16,
@@ -554,23 +566,27 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 9,
   },
+
   previewNote: {
     color: COLORS.mutedText,
     fontSize: 14,
     lineHeight: 21,
     marginTop: 8,
   },
+
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
   },
+
   switchText: {
     color: COLORS.text,
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 12,
   },
+
   legalLink: {
     color: COLORS.text,
     fontSize: 16,
@@ -579,6 +595,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 9,
   },
+
   signOutButton: {
     backgroundColor: COLORS.teal,
     minHeight: 50,
@@ -587,9 +604,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 5,
     marginBottom: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.tealShadow,
   },
+
   deleteButton: {
     backgroundColor: COLORS.red,
     minHeight: 50,
@@ -597,6 +613,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   actionButtonText: {
     color: '#FFFFFF',
     fontSize: 17,
