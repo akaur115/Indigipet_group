@@ -1,3 +1,4 @@
+
 import React, {
   useCallback,
   useEffect,
@@ -6,13 +7,14 @@ import React, {
 } from 'react';
 
 import {
+  ActivityIndicator,
+  Alert,
+  Platform,
   StatusBar,
-  View,
   StyleSheet,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
-  Alert,
+  View,
 } from 'react-native';
 
 import type {
@@ -33,7 +35,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import LearningScreen from './src/screens/LearningScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
-// REQUIRED TERMS SCREEN
+// TERMS OF SERVICE SCREEN
 import TermsAcceptanceScreen from './src/screens/TermsAcceptanceScreen';
 
 // FIREBASE AUTHENTICATION
@@ -44,6 +46,7 @@ import {
   userHasMFA,
 } from './src/services/authService';
 
+// AVAILABLE APP SCREENS
 type Screen =
   | 'welcome'
   | 'login'
@@ -60,6 +63,7 @@ type MainTab =
   | 'learning'
   | 'settings';
 
+// MAIN NAVIGATION TABS
 const TABS: {
   id: MainTab;
   icon: string;
@@ -82,29 +86,46 @@ const TABS: {
   },
 ];
 
+// ANDROID STATUS BAR SPACING
+// PREVENTS HEADINGS FROM OVERLAPPING
+// THE CLOCK, WIFI AND BATTERY ICONS
+const ANDROID_STATUS_BAR_HEIGHT =
+  Platform.OS === 'android'
+    ? StatusBar.currentHeight ?? 24
+    : 0;
+
 function App() {
-  const [currentScreen, setCurrentScreen] =
-    useState<Screen>('welcome');
+  // CURRENT APP SCREEN
+  const [
+    currentScreen,
+    setCurrentScreen,
+  ] = useState<Screen>('welcome');
 
-  const [checkingLogin, setCheckingLogin] =
-    useState(true);
+  // CHECKING SAVED LOGIN
+  const [
+    checkingLogin,
+    setCheckingLogin,
+  ] = useState(true);
 
-  const [mfaResolver, setMFAResolver] =
-    useState<MultiFactorResolver | null>(
-      null,
-    );
+  // FIREBASE MFA RESOLVER
+  const [
+    mfaResolver,
+    setMFAResolver,
+  ] = useState<MultiFactorResolver | null>(
+    null,
+  );
 
-  // USER WHO HAS ACCEPTED TERMS
+  // USER WHO ACCEPTED TERMS
   const [
     termsAcceptedUid,
     setTermsAcceptedUid,
   ] = useState<string | null>(null);
 
-  // KEEP EXISTING REGISTER / MFA FLOW
+  // TRACK LOGIN AFTER MFA SETUP
   const goToLoginAfterSignOut =
     useRef(false);
 
-  // CALLED AFTER TERMS ARE SAVED
+  // CALLED AFTER TERMS ACCEPTANCE
   const handleTermsAccepted = useCallback(
     (uid: string) => {
       setTermsAcceptedUid(uid);
@@ -113,11 +134,16 @@ function App() {
   );
 
   // ROUTE USER BASED ON AUTH STATUS
-  const routeUser = (user: User | null) => {
+  const routeUser = (
+    user: User | null,
+  ) => {
+    // NOT SIGNED IN
     if (!user) {
       setTermsAcceptedUid(null);
 
-      if (goToLoginAfterSignOut.current) {
+      if (
+        goToLoginAfterSignOut.current
+      ) {
         goToLoginAfterSignOut.current =
           false;
 
@@ -129,24 +155,25 @@ function App() {
       return;
     }
 
-    // EMAIL VERIFICATION REQUIRED
+    // VERIFY EMAIL BEFORE ENTERING APP
     if (!user.emailVerified) {
       setCurrentScreen('verifyEmail');
       return;
     }
 
-    // MFA REQUIRED
+    // MFA MUST BE SET UP
     if (!userHasMFA(user)) {
       setCurrentScreen('mfaSetup');
       return;
     }
 
     // AUTHENTICATED USER
-    // TERMS GATE STILL RUNS BEFORE HOME
+    // TERMS ACCEPTANCE IS CHECKED
+    // BEFORE MAIN APP IS DISPLAYED
     setCurrentScreen('home');
   };
 
-  // LISTEN FOR FIREBASE LOGIN
+  // FIREBASE AUTHENTICATION LISTENER
   useEffect(() => {
     const unsubscribe =
       listenToAuthState(user => {
@@ -157,16 +184,18 @@ function App() {
     return unsubscribe;
   }, []);
 
-  // LOG OUT
+  // LOG OUT OF INDIGIPET
   const handleLogout = async () => {
     try {
-      goToLoginAfterSignOut.current = false;
+      goToLoginAfterSignOut.current =
+        false;
 
       setTermsAcceptedUid(null);
 
       await logoutUser();
 
       setMFAResolver(null);
+
       setCurrentScreen('welcome');
     } catch (error) {
       console.log(
@@ -178,9 +207,11 @@ function App() {
     }
   };
 
-  // RENDER SCREENS
+  // DISPLAY THE CORRECT SCREEN
   const renderScreen = () => {
     switch (currentScreen) {
+
+      // WELCOME PAGE
       case 'welcome':
         return (
           <WelcomeScreen
@@ -193,6 +224,7 @@ function App() {
           />
         );
 
+      // LOGIN PAGE
       case 'login':
         return (
           <LoginScreen
@@ -212,6 +244,7 @@ function App() {
           />
         );
 
+      // REGISTER PAGE
       case 'register':
         return (
           <RegisterScreen
@@ -224,6 +257,7 @@ function App() {
           />
         );
 
+      // EMAIL VERIFICATION
       case 'verifyEmail':
         return (
           <VerifyEmailScreen
@@ -236,6 +270,7 @@ function App() {
           />
         );
 
+      // MFA SETUP
       case 'mfaSetup':
         return (
           <MFASetupScreen
@@ -251,7 +286,6 @@ function App() {
                 setTermsAcceptedUid(null);
 
                 setCurrentScreen('login');
-
               } catch (error) {
                 console.log(
                   'AUTO LOGOUT ERROR:',
@@ -266,13 +300,15 @@ function App() {
                   'MFA setup completed, but automatic logout failed. Please log out from Settings.',
                 );
 
-                // STILL PROTECTED BY TERMS GATE
+                // STILL PROTECTED BY
+                // TERMS ACCEPTANCE SCREEN
                 setCurrentScreen('home');
               }
             }}
           />
         );
 
+      // MFA VERIFICATION
       case 'mfaVerify':
         if (!mfaResolver) {
           return (
@@ -300,7 +336,7 @@ function App() {
             onComplete={() => {
               setMFAResolver(null);
 
-              // TERMS GATE CHECKS BEFORE HOME
+              // CHECK TERMS BEFORE HOME
               setCurrentScreen('home');
             }}
             onCancel={() => {
@@ -311,6 +347,7 @@ function App() {
           />
         );
 
+      // MAIN APP SCREENS
       case 'home':
       case 'learning':
       case 'settings': {
@@ -320,6 +357,7 @@ function App() {
           return (
             <View
               style={styles.loadingContainer}>
+
               <ActivityIndicator
                 size="large"
                 color="#035643"
@@ -328,20 +366,28 @@ function App() {
           );
         }
 
-        // STOP ACCESS WITHOUT TERMS ACCEPTANCE
-        if (termsAcceptedUid !== user.uid) {
+        // REQUIRE TERMS OF SERVICE
+        // BEFORE ENTERING MAIN APP
+        if (
+          termsAcceptedUid !== user.uid
+        ) {
           return (
             <TermsAcceptanceScreen
               uid={user.uid}
-              onAccepted={handleTermsAccepted}
+              onAccepted={
+                handleTermsAccepted
+              }
               onDecline={handleLogout}
             />
           );
         }
 
-        // ONLY ACCEPTED USERS CAN ENTER
+        // USER ACCEPTED TERMS
+        // SHOW HOME / LEARNING / SETTINGS
         return (
           <View style={styles.mainLayout}>
+
+            {/* CURRENT MAIN SCREEN */}
             <View style={styles.mainContent}>
               {currentScreen === 'home' ? (
                 <HomeScreen
@@ -357,7 +403,9 @@ function App() {
                 />
               ) : (
                 <SettingsScreen
-                  email={user.email ?? ''}
+                  email={
+                    user.email ?? ''
+                  }
                   onLogout={handleLogout}
                   onReturnHome={() =>
                     setCurrentScreen('home')
@@ -392,7 +440,6 @@ function App() {
                     <Text
                       style={[
                         styles.bottomText,
-
                         selected &&
                           styles.bottomTextSelected,
                       ]}>
@@ -407,6 +454,7 @@ function App() {
         );
       }
 
+      // DEFAULT WELCOME PAGE
       default:
         return (
           <WelcomeScreen
@@ -421,36 +469,51 @@ function App() {
     }
   };
 
+  // LOADING SAVED LOGIN
   if (checkingLogin) {
     return (
-      <View style={styles.loadingContainer}>
-        <StatusBar barStyle="dark-content" />
+      <View style={styles.container}>
+        
+      <StatusBar barStyle="light-content" />
 
-        <ActivityIndicator
-          size="large"
-          color="#035643"
-        />
+        <View
+          style={styles.loadingContainer}>
 
-        <Text style={styles.loadingText}>
-          Loading IndigiPet...
-        </Text>
+          <ActivityIndicator
+            size="large"
+            color="#035643"
+          />
+
+          <Text style={styles.loadingText}>
+            Loading IndigiPet...
+          </Text>
+        </View>
       </View>
     );
   }
 
+  // MAIN APP LAYOUT
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+
+      {/* ANDROID STATUS BAR */}
+      
+      <StatusBar barStyle="light-content" />
 
       {renderScreen()}
     </View>
   );
 }
 
+// STYLES
 const styles = StyleSheet.create({
+
+  // MAIN FIX FOR STATUS BAR
   container: {
     flex: 1,
-    backgroundColor: '#FFFBEF',
+    backgroundColor: '#035643',
+    paddingTop:
+      ANDROID_STATUS_BAR_HEIGHT,
   },
 
   loadingContainer: {
@@ -475,6 +538,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  // BOTTOM NAVIGATION BAR
   bottomBar: {
     flexDirection: 'row',
     backgroundColor: '#FFFBF0',

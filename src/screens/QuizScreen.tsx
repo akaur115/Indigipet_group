@@ -7,7 +7,6 @@ import React, {
 
 import {
   ActivityIndicator,
-  type DimensionValue,
   Alert,
   SafeAreaView,
   ScrollView,
@@ -16,6 +15,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type DimensionValue,
 } from 'react-native';
 
 import {
@@ -36,6 +36,7 @@ import {
   tierLabel,
   type AnswerEvent,
   type CategoryQuizProgress,
+  type MasteryTier,
 } from '../services/quizEngine';
 
 import {
@@ -61,7 +62,6 @@ type SaveState =
   | 'saved'
   | 'error';
 
-// CREATE A UNIQUE SESSION ID
 function uniqueId(): string {
   return (
     String(Date.now()) +
@@ -69,6 +69,28 @@ function uniqueId(): string {
     Math.random().toString(36).slice(2, 12)
   );
 }
+
+// MATCH LEARNING PAGE COLOURS
+const TIER_COLORS: Record<
+  MasteryTier,
+  {
+    backgroundColor: string;
+    color: string;
+  }
+> = {
+  new: {
+    backgroundColor: '#F3E6FF',
+    color: '#7F1AC2',
+  },
+  learning: {
+    backgroundColor: '#E5F1FF',
+    color: '#035BAD',
+  },
+  known: {
+    backgroundColor: '#E4F5DF',
+    color: '#168600',
+  },
+};
 
 export default function QuizScreen({
   uid,
@@ -120,10 +142,9 @@ export default function QuizScreen({
     useState('');
 
   const savingLock = useRef(false);
-
   const sessionId = useRef(uniqueId());
 
-  // LOAD FIREBASE LEARNING PROGRESS
+  // LOAD SAVED LEARNING PROGRESS
   useEffect(() => {
     let active = true;
 
@@ -173,7 +194,6 @@ export default function QuizScreen({
         setCurrent(first);
         setOptions(answerOptions(first));
         setPhase('playing');
-
       } catch (error: any) {
         if (!active) {
           return;
@@ -195,7 +215,6 @@ export default function QuizScreen({
     };
   }, [uid, categoryId, retryNumber]);
 
-  // CURRENT SCORE
   const score = answers.filter(
     answer => answer.correct,
   ).length;
@@ -207,11 +226,10 @@ export default function QuizScreen({
     selectedId !== null;
 
   const isCurrentCorrect = Boolean(
-    current &&
-    selectedId === current.id,
+    current && selectedId === current.id,
   );
 
-  // USER SELECTS AN ANSWER
+  // CHECK AN ANSWER
   const chooseAnswer = (id: string) => {
     if (
       !current ||
@@ -221,8 +239,7 @@ export default function QuizScreen({
       return;
     }
 
-    const correct =
-      id === current.id;
+    const correct = id === current.id;
 
     setSelectedId(id);
 
@@ -244,7 +261,7 @@ export default function QuizScreen({
     );
   };
 
-  // SAVE COMPLETED QUIZ TO FIREBASE
+  // SAVE REWARDS IN FIREBASE
   const saveFinishedQuiz = async (
     finalAnswers: AnswerEvent[],
     finalProgress: CategoryQuizProgress,
@@ -272,21 +289,19 @@ export default function QuizScreen({
       );
 
       setSaveState('saved');
-
     } catch (error: any) {
       setSaveError(
         error?.message ||
-          'Could not save your quiz.',
+          'Could not save the quiz.',
       );
 
       setSaveState('error');
-
     } finally {
       savingLock.current = false;
     }
   };
 
-  // NEXT QUESTION OR RESULTS
+  // NEXT QUESTION
   const nextQuestion = () => {
     if (
       !answeredThisQuestion ||
@@ -321,7 +336,7 @@ export default function QuizScreen({
     setSelectedId(null);
   };
 
-  // LEAVE QUIZ
+  // GO BACK
   const back = () => {
     if (
       phase === 'results' &&
@@ -329,8 +344,9 @@ export default function QuizScreen({
     ) {
       Alert.alert(
         'Save Incomplete',
-        'Please save your quiz progress before leaving.',
+        'Save your quiz progress before leaving.',
       );
+
       return;
     }
 
@@ -356,25 +372,22 @@ export default function QuizScreen({
     );
   };
 
-  // PLAY AGAIN
-  const restart = () => {
+  const restart = () =>
     setRetryNumber(value => value + 1);
-  };
 
-  // WORDS TO DISPLAY ON RESULTS PAGE
   const wordResults =
-    QUIZ_WORDS[categoryId].filter(
-      w =>
-        answers.some(
-          a => a.wordId === w.id,
-        ),
+    QUIZ_WORDS[categoryId].filter(word =>
+      answers.some(
+        answer =>
+          answer.wordId === word.id,
+      ),
     );
 
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar barStyle="light-content" />
 
-      {/* DARK GREEN HEADER */}
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={back}
@@ -422,7 +435,7 @@ export default function QuizScreen({
         </View>
       )}
 
-      {/* LOAD ERROR */}
+      {/* ERROR */}
       {phase === 'error' && (
         <View style={styles.center}>
           <Text style={styles.title}>
@@ -454,170 +467,168 @@ export default function QuizScreen({
       )}
 
       {/* QUIZ QUESTIONS */}
-      {phase === 'playing' && current && (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}>
+      {phase === 'playing' &&
+        current && (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.content}>
 
-          {/* PROGRESS BAR */}
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: (
-                    (
-                      (answers.length / 7) *
-                      100
-                    ) + '%'
-                  ) as DimensionValue,
-                },
-              ]}
-            />
-          </View>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: (
+                      String(
+                        (answers.length / 7) *
+                          100,
+                      ) + '%'
+                    ) as DimensionValue,
+                  },
+                ]}
+              />
+            </View>
 
-          <Text style={styles.eyebrow}>
-            QUESTION{' '}
-            {Math.min(
-              answers.length +
-                (selectedId ? 0 : 1),
-              7,
-            )}{' OF 7'}
-          </Text>
-
-          <Text style={styles.title}>
-            Choose the Ojibwe word for:
-          </Text>
-
-          {/* ENGLISH QUESTION */}
-          <View style={styles.promptCard}>
-            <Text style={styles.prompt}>
-              {current.word_english}
+            <Text style={styles.eyebrow}>
+              QUESTION{' '}
+              {Math.min(
+                answers.length +
+                  (selectedId ? 0 : 1),
+                7,
+              )}{' OF 7'}
             </Text>
 
-            <Text style={styles.audioNote}>
-              Text mode
-              {' · '}
-              Audio will be added when
-              recordings are approved
+            <Text style={styles.title}>
+              Choose the Ojibwe word for:
             </Text>
-          </View>
 
-          {/* FOUR ANSWERS */}
-          <View style={styles.answers}>
-            {options.map(
-              (option, index) => {
-                const isCorrectOption =
-                  option.id === current.id;
-
-                const isSelected =
-                  option.id === selectedId;
-
-                const showCorrect =
-                  answeredThisQuestion &&
-                  isCorrectOption;
-
-                const showWrong =
-                  answeredThisQuestion &&
-                  isSelected &&
-                  !isCorrectOption;
-
-                return (
-                  <TouchableOpacity
-                    key={option.id}
-                    onPress={() =>
-                      chooseAnswer(option.id)
-                    }
-                    disabled={answeredThisQuestion}
-                    accessibilityRole="button"
-                    style={[
-                      styles.answer,
-                      showCorrect &&
-                        styles.correctAnswer,
-                      showWrong &&
-                        styles.wrongAnswer,
-                    ]}>
-
-                    <Text
-                      style={styles.optionLetter}>
-
-                      {
-                        ['A', 'B', 'C', 'D'][
-                          index
-                        ]
-                      }
-                    </Text>
-
-                    <Text style={styles.answerText}>
-                      {option.word_ojibwe}
-                    </Text>
-
-                    {showCorrect && (
-                      <Text
-                        style={styles.answerMark}>
-                        ✓
-                      </Text>
-                    )}
-
-                    {showWrong && (
-                      <Text
-                        style={styles.answerMark}>
-                        ✕
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              },
-            )}
-          </View>
-
-          {/* CORRECT/INCORRECT FEEDBACK */}
-          {answeredThisQuestion && (
-            <View
-              style={[
-                styles.feedback,
-
-                isCurrentCorrect
-                  ? styles.feedbackGood
-                  : styles.feedbackBad,
-              ]}>
-
-              <Text style={styles.feedbackTitle}>
-                {isCurrentCorrect
-                  ? 'Great job!'
-                  : 'Keep practicing!'}
-              </Text>
-
-              <Text style={styles.feedbackText}>
-                {current.word_ojibwe}
-                {' = '}
+            <View style={styles.promptCard}>
+              <Text style={styles.prompt}>
                 {current.word_english}
               </Text>
+
+              <Text style={styles.audioNote}>
+                Text mode · Audio will be added
+                when recordings are approved
+              </Text>
             </View>
-          )}
 
-          {/* NEXT BUTTON */}
-          <TouchableOpacity
-            style={[
-              styles.next,
+            {/* FOUR ANSWERS */}
+            <View style={styles.answers}>
+              {options.map(
+                (option, index) => {
+                  const isCorrectOption =
+                    option.id === current.id;
 
-              !answeredThisQuestion &&
-                styles.disabled,
-            ]}
-            disabled={!answeredThisQuestion}
-            onPress={nextQuestion}>
+                  const isSelected =
+                    option.id === selectedId;
 
-            <Text style={styles.nextText}>
-              {answers.length === 7
-                ? 'See Results'
-                : 'Next Question  →'}
-            </Text>
-          </TouchableOpacity>
+                  const showCorrect =
+                    answeredThisQuestion &&
+                    isCorrectOption;
 
-        </ScrollView>
-      )}
+                  const showWrong =
+                    answeredThisQuestion &&
+                    isSelected &&
+                    !isCorrectOption;
 
-      {/* RESULTS PAGE */}
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      onPress={() =>
+                        chooseAnswer(
+                          option.id,
+                        )
+                      }
+                      disabled={
+                        answeredThisQuestion
+                      }
+                      accessibilityRole="button"
+                      style={[
+                        styles.answer,
+                        showCorrect &&
+                          styles.correctAnswer,
+                        showWrong &&
+                          styles.wrongAnswer,
+                      ]}>
+
+                      <Text
+                        style={styles.optionLetter}>
+                        {
+                          ['A', 'B', 'C', 'D'][
+                            index
+                          ]
+                        }
+                      </Text>
+
+                      <Text
+                        style={styles.answerText}>
+                        {option.word_ojibwe}
+                      </Text>
+
+                      {showCorrect && (
+                        <Text
+                          style={styles.answerMark}>
+                          ✓
+                        </Text>
+                      )}
+
+                      {showWrong && (
+                        <Text
+                          style={styles.answerMark}>
+                          ✕
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                },
+              )}
+            </View>
+
+            {answeredThisQuestion && (
+              <View
+                style={[
+                  styles.feedback,
+                  isCurrentCorrect
+                    ? styles.feedbackGood
+                    : styles.feedbackBad,
+                ]}>
+
+                <Text style={styles.feedbackTitle}>
+                  {isCurrentCorrect
+                    ? 'Great job!'
+                    : 'Keep practicing!'}
+                </Text>
+
+                <Text style={styles.feedbackText}>
+                  {current.word_ojibwe}
+                  {' = '}
+                  {current.word_english}
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.next,
+                !answeredThisQuestion &&
+                  styles.disabled,
+              ]}
+              disabled={
+                !answeredThisQuestion
+              }
+              onPress={nextQuestion}>
+
+              <Text style={styles.nextText}>
+                {answers.length === 7
+                  ? 'See Results'
+                  : 'Next Question →'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+      {/* QUIZ RESULTS */}
       {phase === 'results' && (
         <ScrollView
           style={styles.scroll}
@@ -628,11 +639,9 @@ export default function QuizScreen({
           </Text>
 
           <Text style={styles.title}>
-            You spent time learning
-            with Esiban!
+            You spent time learning with Esiban!
           </Text>
 
-          {/* SCORE */}
           <View style={styles.scoreCard}>
             <Text style={styles.scoreBig}>
               {score} / 7
@@ -643,7 +652,7 @@ export default function QuizScreen({
             </Text>
           </View>
 
-          {/* XP, COINS, FRIENDSHIP */}
+          {/* REWARDS */}
           <View style={styles.rewardRow}>
             <View style={styles.rewardCard}>
               <Text style={styles.rewardBig}>
@@ -676,37 +685,89 @@ export default function QuizScreen({
             </View>
           </View>
 
-          {/* WORD MASTERY */}
+          {/* COLOURED WORD PROGRESS */}
           <Text style={styles.sectionHeading}>
-            Words Practiced
+            Words practiced
           </Text>
 
-          {wordResults.map(word => (
-            <View
-              style={styles.wordRow}
-              key={word.id}>
+          {wordResults.map(word => {
+            const before: MasteryTier =
+              startingProgress.words[
+                word.id
+              ]?.tier ?? 'new';
 
-              <Text style={styles.wordTitle}>
-                {word.word_ojibwe}
-                {' = '}
-                {word.word_english}
-              </Text>
+            const after: MasteryTier =
+              draftProgress.words[
+                word.id
+              ]?.tier ?? 'new';
 
-              <Text style={styles.mastery}>
-                {tierLabel(
-                  startingProgress.words[
-                    word.id
-                  ]?.tier ?? 'new',
-                )}
-                {' → '}
-                {tierLabel(
-                  draftProgress.words[
-                    word.id
-                  ]?.tier ?? 'new',
-                )}
-              </Text>
-            </View>
-          ))}
+            return (
+              <View
+                style={styles.wordRow}
+                key={word.id}>
+
+                <Text style={styles.wordTitle}>
+                  {word.word_ojibwe}
+                  {' = '}
+                  {word.word_english}
+                </Text>
+
+                <View style={styles.masteryRow}>
+                  <View
+                    style={[
+                      styles.tierBadge,
+                      {
+                        backgroundColor:
+                          TIER_COLORS[before]
+                            .backgroundColor,
+                      },
+                    ]}>
+
+                    <Text
+                      style={[
+                        styles.tierText,
+                        {
+                          color:
+                            TIER_COLORS[before]
+                              .color,
+                        },
+                      ]}>
+
+                      {tierLabel(before)}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.tierArrow}>
+                    →
+                  </Text>
+
+                  <View
+                    style={[
+                      styles.tierBadge,
+                      {
+                        backgroundColor:
+                          TIER_COLORS[after]
+                            .backgroundColor,
+                      },
+                    ]}>
+
+                    <Text
+                      style={[
+                        styles.tierText,
+                        {
+                          color:
+                            TIER_COLORS[after]
+                              .color,
+                        },
+                      ]}>
+
+                      {tierLabel(after)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
 
           {/* FIREBASE SAVE STATUS */}
           {saveState === 'saving' && (
@@ -748,7 +809,6 @@ export default function QuizScreen({
             </View>
           )}
 
-          {/* PLAY AGAIN */}
           <TouchableOpacity
             style={[
               styles.primary,
@@ -763,7 +823,6 @@ export default function QuizScreen({
             </Text>
           </TouchableOpacity>
 
-          {/* BACK TO LEARNING */}
           <TouchableOpacity
             style={[
               styles.outlineButton,
@@ -779,7 +838,6 @@ export default function QuizScreen({
           </TouchableOpacity>
         </ScrollView>
       )}
-
     </SafeAreaView>
   );
 }
@@ -1107,10 +1165,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  mastery: {
-    fontSize: 13,
-    color: '#0372DA',
-    marginTop: 5,
+  masteryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+
+  tierBadge: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+
+  tierText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+
+  tierArrow: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#484139',
   },
 
   savedText: {

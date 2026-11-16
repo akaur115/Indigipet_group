@@ -1,7 +1,5 @@
-import React, {
-  useEffect,
-  useState,
-} from 'react';
+
+import React, {useEffect, useState} from 'react';
 
 import {
   ActivityIndicator,
@@ -33,12 +31,14 @@ import {
   PRIVACY_POLICY,
 } from './legalDocuments';
 
+// SETTINGS SCREEN PROPS
 type Props = {
   email: string;
   onLogout: () => void | Promise<void>;
   onReturnHome?: () => void;
 };
 
+// DROPDOWN SECTIONS
 type SectionId =
   | 'account'
   | 'notifications'
@@ -49,6 +49,7 @@ type SectionId =
 type SectionsState =
   Record<SectionId, boolean>;
 
+// INDIGIPET COLOURS
 const COLORS = {
   darkGreen: '#035643',
   cream: '#FFFBEF',
@@ -63,11 +64,19 @@ const COLORS = {
   border: '#D4C7B0',
 };
 
+// EXACT CLIENT-PROVIDED LANGUAGE CREDITS
+const LANGUAGE_CREDITS =
+  'Chi-miigwech to Corey Whitford for sharing his voice and knowledge. ' +
+  'Written and audio translations were provided by Corey Whitford from Sandy Bay First Nation. ' +
+  'We acknowledge that Indigenous languages can vary between communities, families, and speakers. ' +
+  'Some words, spellings, or translations may differ from what you know or use.';
+
 export default function SettingsScreen({
   email,
   onLogout,
   onReturnHome,
 }: Props) {
+  // COLLAPSIBLE SETTINGS SECTIONS
   const [sections, setSections] =
     useState<SectionsState>({
       account: false,
@@ -77,23 +86,29 @@ export default function SettingsScreen({
       legal: false,
     });
 
+  // PRIVACY POLICY SCREEN
   const [showPrivacy, setShowPrivacy] =
     useState(false);
 
+  // NOTIFICATION SETTINGS
   const [
     notificationsEnabled,
     setNotificationsEnabled,
   ] = useState(false);
 
+  // SOUND SETTINGS
   const [soundEnabled, setSoundEnabled] =
     useState(false);
 
+  // USER ACCOUNT
   const [username, setUsername] =
     useState('Not available');
 
+  // LOGOUT STATUS
   const [savingLogout, setSavingLogout] =
     useState(false);
 
+  // LOAD USER ACCOUNT DETAILS FROM FIREBASE
   useEffect(() => {
     const user = getCurrentUser();
 
@@ -122,6 +137,8 @@ export default function SettingsScreen({
           setUsername(
             String(data.name),
           );
+        } else {
+          setUsername('Not available');
         }
       },
       error => {
@@ -135,14 +152,17 @@ export default function SettingsScreen({
     return unsubscribe;
   }, []);
 
-  const toggleSection = (id: SectionId) => {
+  // OPEN OR CLOSE SETTINGS SECTION
+  const toggleSection = (
+    id: SectionId,
+  ) => {
     setSections(previous => ({
       ...previous,
       [id]: !previous[id],
     }));
   };
 
-  // SIGN OUT
+  // SIGN OUT USER
   const handleSignOut = () => {
     Alert.alert(
       'Sign Out',
@@ -163,10 +183,10 @@ export default function SettingsScreen({
 
             try {
               await onLogout();
-            } catch (e: any) {
+            } catch (error: any) {
               Alert.alert(
                 'Sign Out Failed',
-                e?.message ||
+                error?.message ||
                   'Please try again.',
               );
             } finally {
@@ -178,7 +198,8 @@ export default function SettingsScreen({
     );
   };
 
-  // EMAIL ACCOUNT DELETION REQUEST
+  // REQUEST ACCOUNT DELETION BY EMAIL
+  // THIS DOES NOT DIRECTLY DELETE USER
   const handleDeleteAccount = () => {
     Alert.alert(
       'Request Account Deletion',
@@ -199,10 +220,10 @@ export default function SettingsScreen({
             const body =
               encodeURIComponent(
                 'Hello,\n\n' +
-                'Please delete my IndigiPet account and associated data.\n\n' +
-                'Account email: ' +
-                email +
-                '\n\nThank you.',
+                  'Please delete my IndigiPet account and associated data.\n\n' +
+                  'Account email: ' +
+                  email +
+                  '\n\nThank you.',
               );
 
             const url =
@@ -226,6 +247,7 @@ export default function SettingsScreen({
     );
   };
 
+  // CREATE DROPDOWN HEADER
   const renderHeader = (
     id: SectionId,
     title: string,
@@ -248,7 +270,7 @@ export default function SettingsScreen({
     </TouchableOpacity>
   );
 
-  // PRIVACY POLICY ONLY
+  // SHOW PRIVACY POLICY
   if (showPrivacy) {
     return (
       <LegalDocumentScreen
@@ -260,15 +282,18 @@ export default function SettingsScreen({
     );
   }
 
+  // MAIN SETTINGS SCREEN
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
+      {/* DARK GREEN HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={onReturnHome}
-          accessibilityRole="button">
+          accessibilityRole="button"
+          accessibilityLabel="Back to Home">
 
           <Text style={styles.backArrow}>
             ‹
@@ -287,7 +312,7 @@ export default function SettingsScreen({
         }
         showsVerticalScrollIndicator={false}>
 
-        {/* ACCOUNT */}
+        {/* ACCOUNT SECTION */}
         <View style={styles.sectionCard}>
           {renderHeader(
             'account',
@@ -307,7 +332,7 @@ export default function SettingsScreen({
           )}
         </View>
 
-        {/* NOTIFICATIONS */}
+        {/* NOTIFICATIONS SECTION */}
         <View style={styles.sectionCard}>
           {renderHeader(
             'notifications',
@@ -332,6 +357,7 @@ export default function SettingsScreen({
                     true: COLORS.green,
                   }}
                   thumbColor="#FFFFFF"
+                  accessibilityLabel="Pet notifications"
                 />
 
                 <Text style={styles.switchText}>
@@ -349,7 +375,7 @@ export default function SettingsScreen({
           )}
         </View>
 
-        {/* SOUND */}
+        {/* SOUND SECTION */}
         <View style={styles.sectionCard}>
           {renderHeader(
             'sound',
@@ -374,6 +400,7 @@ export default function SettingsScreen({
                     true: COLORS.green,
                   }}
                   thumbColor="#FFFFFF"
+                  accessibilityLabel="Voice-over sound"
                 />
 
                 <Text style={styles.switchText}>
@@ -385,13 +412,14 @@ export default function SettingsScreen({
 
               <Text style={styles.previewNote}>
                 Audio controls will work
-                when lesson recordings are added.
+                when lesson recordings
+                are added.
               </Text>
             </View>
           )}
         </View>
 
-        {/* ABOUT */}
+        {/* ABOUT SECTION */}
         <View style={styles.sectionCard}>
           {renderHeader(
             'about',
@@ -404,19 +432,21 @@ export default function SettingsScreen({
                 App Version: Development Preview
               </Text>
 
-              <Text style={styles.detailText}>
+              {/* NEW LANGUAGE CREDITS */}
+              <Text style={styles.creditsTitle}>
                 Language Credits
               </Text>
 
-              <Text style={styles.description}>
-                Approved language contributor
-                credits will appear here.
-              </Text>
+              <View style={styles.creditsBox}>
+                <Text style={styles.creditsText}>
+                  {LANGUAGE_CREDITS}
+                </Text>
+              </View>
             </View>
           )}
         </View>
 
-        {/* PRIVACY POLICY */}
+        {/* PRIVACY POLICY SECTION */}
         <View style={styles.sectionCard}>
           {renderHeader(
             'legal',
@@ -429,21 +459,23 @@ export default function SettingsScreen({
                 onPress={() =>
                   setShowPrivacy(true)
                 }
-                accessibilityRole="button">
+                accessibilityRole="button"
+                accessibilityLabel="Read Privacy Policy">
 
                 <Text style={styles.legalLink}>
-                  Privacy Policy  ›
+                  Privacy Policy ›
                 </Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* SIGN OUT */}
+        {/* SIGN OUT BUTTON */}
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
-          disabled={savingLogout}>
+          disabled={savingLogout}
+          accessibilityRole="button">
 
           {savingLogout ? (
             <ActivityIndicator
@@ -456,21 +488,22 @@ export default function SettingsScreen({
           )}
         </TouchableOpacity>
 
-        {/* DELETE ACCOUNT */}
+        {/* DELETE ACCOUNT BUTTON */}
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={handleDeleteAccount}>
+          onPress={handleDeleteAccount}
+          accessibilityRole="button">
 
           <Text style={styles.actionButtonText}>
             Delete Account
           </Text>
         </TouchableOpacity>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// SETTINGS STYLES
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -585,6 +618,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 12,
+  },
+
+  // LANGUAGE CREDITS STYLING
+  creditsTitle: {
+    color: COLORS.darkGreen,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 15,
+    marginBottom: 10,
+  },
+
+  creditsBox: {
+    backgroundColor: '#EAF5E9',
+    borderColor: '#B3D5B0',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 13,
+    marginBottom: 5,
+  },
+
+  creditsText: {
+    color: COLORS.text,
+    fontSize: 16,
+    lineHeight: 25,
+    fontWeight: '400',
   },
 
   legalLink: {
