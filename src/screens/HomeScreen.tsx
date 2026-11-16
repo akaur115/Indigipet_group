@@ -1,12 +1,11 @@
-import React, {useEffect, useState} from 'react';
 
+import React, {useEffect, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
   AppState,
   Image,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -43,17 +42,13 @@ const COLORS = {
   green: '#035643',
   cream2: '#FFFBF0',
   brown: '#6E6151',
-  teal: '#089BA1',
   orange: '#EC6E00',
   gold: '#FFAE33',
   track: '#F3E9CF',
   border: '#E5DAC8',
 };
 
-const FOOD_IMAGES: Record<
-  string,
-  ImageSourcePropType
-> = {
+const FOOD_IMAGES: Record<string, ImageSourcePropType> = {
   cookie: require('../../assets/images/cookie.png'),
   corn: require('../../assets/images/corn.png'),
   rice: require('../../assets/images/rice.png'),
@@ -80,9 +75,7 @@ function Bar({value}: {value: number}) {
         style={[
           styles.barFill,
           {
-            width: (
-              String(safe) + '%'
-            ) as DimensionValue,
+            width: `${safe}%` as DimensionValue,
           },
         ]}
       />
@@ -90,49 +83,28 @@ function Bar({value}: {value: number}) {
   );
 }
 
-export default function HomeScreen({
-  uid,
-}: Props) {
-  const [game, setGame] =
-    useState<GameData | null>(null);
+export default function HomeScreen({uid}: Props) {
+  const [game, setGame] = useState<GameData | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const [errorText, setErrorText] = useState('');
+  const [feeding, setFeeding] = useState(false);
+  const [dialogueNumber, setDialogueNumber] = useState(0);
+  const [feedSpeech, setFeedSpeech] = useState<string | null>(null);
+  const [lastQuizAt, setLastQuizAt] = useState(0);
 
-  const [now, setNow] =
-    useState(Date.now());
-
-  const [errorText, setErrorText] =
-    useState('');
-
-  const [feeding, setFeeding] =
-    useState(false);
-
-  const [
-    dialogueNumber,
-    setDialogueNumber,
-  ] = useState(0);
-
-  const [feedSpeech, setFeedSpeech] =
-    useState<string | null>(null);
-
-  const [lastQuizAt, setLastQuizAt] =
-    useState(0);
-
-  // LOAD GAME DATA FROM FIREBASE
+  // LOAD FIREBASE DATA AND UPDATE PET CARE
   useEffect(() => {
     let active = true;
     let unsubscribe = () => {};
 
     ensureGameData(uid)
       .then(() => {
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         unsubscribe = subscribeGameData(
           uid,
           saved => {
-            if (!active) {
-              return;
-            }
+            if (!active) return;
 
             setGame(saved);
             setErrorText('');
@@ -148,40 +120,35 @@ export default function HomeScreen({
       .catch((error: any) => {
         if (active) {
           setErrorText(
-            error?.message ||
-              'Unable to load Esiban.',
+            error?.message || 'Unable to load Esiban.',
           );
         }
       });
 
-    // UPDATE HUNGER AND FRIENDSHIP
-    // EVERY FIVE SECONDS WHILE OPEN
+    // DECAY UPDATES WHILE THE APP IS OPEN
     const timer = setInterval(
       () => setNow(Date.now()),
       5000,
     );
 
-    // ALSO UPDATE WHEN USER RETURNS
-    // TO THE APP
-    const appSubscription =
-      AppState.addEventListener(
-        'change',
-        state => {
-          if (state === 'active') {
-            setNow(Date.now());
-          }
-        },
-      );
+    const subscription = AppState.addEventListener(
+      'change',
+      state => {
+        if (state === 'active') {
+          setNow(Date.now());
+        }
+      },
+    );
 
     return () => {
       active = false;
       unsubscribe();
       clearInterval(timer);
-      appSubscription.remove();
+      subscription.remove();
     };
   }, [uid]);
 
-  // DETECT A COMPLETED QUIZ
+  // QUIZ COMPLETION MESSAGE
   useEffect(() => {
     const reference = doc(
       getFirestore(),
@@ -192,8 +159,7 @@ export default function HomeScreen({
     const unsubscribe = onSnapshot(
       reference,
       snapshot => {
-        const event =
-          snapshot.data()?.lastQuizEvent;
+        const event = snapshot.data()?.lastQuizEvent;
 
         setLastQuizAt(
           typeof event?.at === 'number'
@@ -214,11 +180,9 @@ export default function HomeScreen({
     return unsubscribe;
   }, [uid]);
 
-  // REMOVE FEED MESSAGE AFTER 12 SEC
+  // CLEAR FEEDING MESSAGE
   useEffect(() => {
-    if (!feedSpeech) {
-      return;
-    }
+    if (!feedSpeech) return;
 
     const timer = setTimeout(
       () => setFeedSpeech(null),
@@ -229,12 +193,8 @@ export default function HomeScreen({
   }, [feedSpeech]);
 
   // FEED ESIBAN
-  const handleFeed = async (
-    item: Food,
-  ) => {
-    if (!game || feeding) {
-      return;
-    }
+  const handleFeed = async (item: Food) => {
+    if (!game || feeding) return;
 
     setFeeding(true);
 
@@ -250,8 +210,7 @@ export default function HomeScreen({
     } catch (error: any) {
       Alert.alert(
         'Cannot feed Esiban',
-        error?.message ||
-          'Please try again.',
+        error?.message || 'Please try again.',
       );
     } finally {
       setFeeding(false);
@@ -264,14 +223,9 @@ export default function HomeScreen({
         <Text style={styles.errorTitle}>
           Unable to load pet data
         </Text>
-
+        <Text style={styles.helper}>{errorText}</Text>
         <Text style={styles.helper}>
-          {errorText}
-        </Text>
-
-        <Text style={styles.helper}>
-          Check your internet and
-          Firestore connection.
+          Check your internet and Firestore connection.
         </Text>
       </View>
     );
@@ -284,7 +238,6 @@ export default function HomeScreen({
           size="large"
           color={COLORS.green}
         />
-
         <Text style={styles.helper}>
           Loading Esiban...
         </Text>
@@ -292,27 +245,15 @@ export default function HomeScreen({
     );
   }
 
-  // CURRENT PET STATISTICS
-  const stats = getCurrentStats(
-    game,
-    now,
-  );
-
+  const stats = getCurrentStats(game, now);
   const level = getLevel(game.xp);
-
-  const normalSpeech = getPetSpeech(
-    stats,
-    dialogueNumber,
-  );
+  const normalSpeech = getPetSpeech(stats, dialogueNumber);
 
   const recentQuiz =
     lastQuizAt > 0 &&
     now >= lastQuizAt &&
-    now - lastQuizAt <
-      QUIZ_SPEECH_MS;
+    now - lastQuizAt < QUIZ_SPEECH_MS;
 
-  // DIFFERENT SPEECH AFTER FEEDING
-  // OR COMPLETING A QUIZ
   const speech =
     feedSpeech ||
     (recentQuiz
@@ -324,26 +265,21 @@ export default function HomeScreen({
     Math.min(
       100,
       (level.xpIntoLevel /
-        Math.max(1, level.xpForNext)) *
-        100,
+        Math.max(1, level.xpForNext)) * 100,
     ),
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.page}
-        showsVerticalScrollIndicator={false}>
+      <View style={styles.page}>
 
-        {/* INDIGIPET HEADER */}
+        {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <View>
               <Text style={styles.brand}>
                 IndigiPet
               </Text>
-
               <Text style={styles.headerSmall}>
                 XP · Level {level.level}
               </Text>
@@ -354,38 +290,31 @@ export default function HomeScreen({
             </Text>
           </View>
 
-          {/* XP BAR */}
           <View style={styles.xpTrack}>
             <View
               style={[
                 styles.xpFill,
                 {
-                  width: (
-                    String(xpPercentage) + '%'
-                  ) as DimensionValue,
+                  width: `${xpPercentage}%` as DimensionValue,
                 },
               ]}
             />
           </View>
 
           <Text style={styles.xpLabel}>
-            {level.xpIntoLevel}
-            {' / '}
-            {level.xpForNext}
+            {level.xpIntoLevel} / {level.xpForNext}
             {' XP to next level'}
           </Text>
         </View>
 
-        {/* ESIBAN SPEECH */}
+        {/* SPEECH */}
         <TouchableOpacity
           style={styles.speechBubble}
           onPress={() =>
-            setDialogueNumber(i => i + 1)
+            setDialogueNumber(number => number + 1)
           }
           accessibilityRole="button"
-          accessibilityLabel={
-            'See another message from Esiban'
-          }>
+          accessibilityLabel="Next Esiban message">
 
           <Text style={styles.speechText}>
             {speech}
@@ -394,23 +323,19 @@ export default function HomeScreen({
           <View style={styles.speechPointer} />
         </TouchableOpacity>
 
-        {/* NEW CLIENT ESIBAN IMAGE */}
+        {/* RACCOON SCENE */}
         <View style={styles.scene}>
           <View style={styles.ground} />
 
           <Image
-            source={require(
-              '../../assets/images/esiban.png'
-            )}
+            source={require('../../assets/images/esiban.png')}
             style={styles.petImage}
             resizeMode="contain"
-            accessibilityLabel={
-              'Esiban, the raccoon mascot'
-            }
+            accessibilityLabel="Esiban raccoon"
           />
         </View>
 
-        {/* NEW FOOD IMAGES */}
+        {/* FOOD BUTTONS */}
         <View style={styles.foodRow}>
           {FOODS.map(item => {
             const cannotAfford =
@@ -421,28 +346,17 @@ export default function HomeScreen({
                 key={item.id}
                 style={[
                   styles.foodCard,
-                  cannotAfford &&
-                    styles.disabled,
+                  cannotAfford && styles.disabled,
                 ]}
-                onPress={() =>
-                  void handleFeed(item)
-                }
-                disabled={
-                  feeding || cannotAfford
-                }
+                onPress={() => void handleFeed(item)}
+                disabled={feeding || cannotAfford}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  'Feed ' +
-                  item.name +
-                  ', costs ' +
-                  item.cost +
-                  ' coins'
+                  `Feed ${item.name} for ${item.cost} coins`
                 }>
 
                 <Image
-                  source={
-                    FOOD_IMAGES[item.id]
-                  }
+                  source={FOOD_IMAGES[item.id]}
                   style={styles.foodImage}
                   resizeMode="contain"
                 />
@@ -478,26 +392,18 @@ export default function HomeScreen({
               styles.statHeading,
               styles.friendshipHeading,
             ]}>
-
             <Text style={styles.statName}>
               Friendship
             </Text>
 
             <Text style={styles.statValue}>
-              {Math.round(
-                stats.friendship,
-              )}%
+              {Math.round(stats.friendship)}%
             </Text>
           </View>
 
           <Bar value={stats.friendship} />
         </View>
-
-        <Text style={styles.footerTip}>
-          Care for Esiban by feeding him
-          and completing learning games.
-        </Text>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -508,20 +414,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cream,
   },
 
-  scroll: {
-    flex: 1,
-  },
-
   page: {
-    padding: 15,
-    paddingBottom: 30,
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 5,
+    gap: 7,
   },
 
   center: {
     flex: 1,
+    backgroundColor: COLORS.cream,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.cream,
     padding: 22,
   },
 
@@ -533,15 +438,16 @@ const styles = StyleSheet.create({
 
   helper: {
     fontSize: 13,
-    textAlign: 'center',
     color: COLORS.brown,
+    textAlign: 'center',
     marginTop: 10,
   },
 
   header: {
     backgroundColor: COLORS.green,
-    padding: 15,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
   },
 
   headerRow: {
@@ -552,13 +458,13 @@ const styles = StyleSheet.create({
 
   brand: {
     color: COLORS.cream,
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
   },
 
   headerSmall: {
     color: COLORS.cream,
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 2,
   },
 
@@ -572,14 +478,13 @@ const styles = StyleSheet.create({
     height: 8,
     backgroundColor: '#064738',
     borderRadius: 8,
-    marginTop: 12,
+    marginTop: 7,
     overflow: 'hidden',
   },
 
   xpFill: {
     height: '100%',
     backgroundColor: COLORS.gold,
-    borderRadius: 8,
   },
 
   xpLabel: {
@@ -593,19 +498,18 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cream2,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 13,
-    marginTop: 13,
-    marginBottom: 14,
-    borderRadius: 12,
-    minHeight: 58,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 10,
+    minHeight: 44,
     justifyContent: 'center',
   },
 
   speechText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#292521',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 18,
   },
 
   speechPointer: {
@@ -621,10 +525,12 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
 
+  // FLEXIBLE SCENE WITH SMALLER RACCOON
   scene: {
-    height: 265,
+    flex: 1,
+    minHeight: 115,
     backgroundColor: '#8CCEE0',
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'hidden',
@@ -635,20 +541,20 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 59,
+    height: '25%',
     backgroundColor: '#4B820D',
   },
 
   petImage: {
-    width: '86%',
-    height: 260,
-    marginBottom: 0,
+    width: '70%',
+    height: '88%',
+    maxHeight: 195,
+    marginBottom: 2,
   },
 
   foodRow: {
     flexDirection: 'row',
-    marginTop: 9,
-    gap: 8,
+    gap: 7,
   },
 
   foodCard: {
@@ -658,10 +564,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cream2,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderBottomWidth: 3,
-    borderRadius: 10,
-    paddingVertical: 9,
-    minHeight: 95,
+    borderBottomWidth: 2,
+    borderRadius: 9,
+    paddingVertical: 5,
+    minHeight: 68,
   },
 
   disabled: {
@@ -669,15 +575,15 @@ const styles = StyleSheet.create({
   },
 
   foodImage: {
-    height: 39,
-    width: 50,
+    width: 43,
+    height: 32,
   },
 
   foodName: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.brown,
-    marginTop: 3,
+    color: '#484139',
+    marginTop: 2,
   },
 
   foodCost: {
@@ -692,8 +598,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 10,
-    padding: 13,
-    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
 
   statHeading: {
@@ -702,38 +608,31 @@ const styles = StyleSheet.create({
   },
 
   friendshipHeading: {
-    marginTop: 12,
+    marginTop: 8,
   },
 
   statName: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: 'bold',
     color: COLORS.brown,
   },
 
   statValue: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.brown,
   },
 
   barTrack: {
-    height: 9,
+    height: 7,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: COLORS.track,
-    marginTop: 6,
+    marginTop: 4,
   },
 
   barFill: {
     height: '100%',
     backgroundColor: COLORS.orange,
     borderRadius: 8,
-  },
-
-  footerTip: {
-    marginTop: 12,
-    color: COLORS.brown,
-    fontSize: 12,
-    textAlign: 'center',
   },
 });

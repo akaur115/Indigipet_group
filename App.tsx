@@ -17,6 +17,11 @@ import {
   View,
 } from 'react-native';
 
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
+
 import type {
   MultiFactorResolver,
   User,
@@ -30,12 +35,12 @@ import VerifyEmailScreen from './src/screens/VerifyEmailScreen';
 import MFASetupScreen from './src/screens/MFASetupScreen';
 import MFAVerifyScreen from './src/screens/MFAVerifyScreen';
 
-// MAIN SCREENS
+// MAIN APP SCREENS
 import HomeScreen from './src/screens/HomeScreen';
 import LearningScreen from './src/screens/LearningScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
-// TERMS OF SERVICE SCREEN
+// TERMS OF SERVICE
 import TermsAcceptanceScreen from './src/screens/TermsAcceptanceScreen';
 
 // FIREBASE AUTHENTICATION
@@ -46,7 +51,7 @@ import {
   userHasMFA,
 } from './src/services/authService';
 
-// AVAILABLE APP SCREENS
+// SCREEN TYPES
 type Screen =
   | 'welcome'
   | 'login'
@@ -63,7 +68,7 @@ type MainTab =
   | 'learning'
   | 'settings';
 
-// MAIN NAVIGATION TABS
+// BOTTOM NAVIGATION BUTTONS
 const TABS: {
   id: MainTab;
   icon: string;
@@ -86,28 +91,37 @@ const TABS: {
   },
 ];
 
-// ANDROID STATUS BAR SPACING
-// PREVENTS HEADINGS FROM OVERLAPPING
-// THE CLOCK, WIFI AND BATTERY ICONS
-const ANDROID_STATUS_BAR_HEIGHT =
-  Platform.OS === 'android'
-    ? StatusBar.currentHeight ?? 24
-    : 0;
+function AppContent() {
+  // REAL ANDROID SCREEN INSETS
+  const insets = useSafeAreaInsets();
 
-function App() {
-  // CURRENT APP SCREEN
+  // KEEP CONTENT BELOW ANDROID CLOCK
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === 'android'
+      ? StatusBar.currentHeight ?? 24
+      : 0,
+  );
+
+  // KEEP NAVIGATION ABOVE ANDROID BUTTONS
+  const bottomInset = Math.max(
+    insets.bottom,
+    Platform.OS === 'android' ? 24 : 0,
+  );
+
+  // CURRENT SCREEN
   const [
     currentScreen,
     setCurrentScreen,
   ] = useState<Screen>('welcome');
 
-  // CHECKING SAVED LOGIN
+  // LOGIN CHECK
   const [
     checkingLogin,
     setCheckingLogin,
   ] = useState(true);
 
-  // FIREBASE MFA RESOLVER
+  // MFA RESOLVER
   const [
     mfaResolver,
     setMFAResolver,
@@ -115,17 +129,16 @@ function App() {
     null,
   );
 
-  // USER WHO ACCEPTED TERMS
+  // TERMS ACCEPTANCE
   const [
     termsAcceptedUid,
     setTermsAcceptedUid,
   ] = useState<string | null>(null);
 
-  // TRACK LOGIN AFTER MFA SETUP
   const goToLoginAfterSignOut =
     useRef(false);
 
-  // CALLED AFTER TERMS ACCEPTANCE
+  // CALLED AFTER USER ACCEPTS TERMS
   const handleTermsAccepted = useCallback(
     (uid: string) => {
       setTermsAcceptedUid(uid);
@@ -133,58 +146,50 @@ function App() {
     [],
   );
 
-  // ROUTE USER BASED ON AUTH STATUS
-  const routeUser = (
-    user: User | null,
-  ) => {
-    // NOT SIGNED IN
-    if (!user) {
-      setTermsAcceptedUid(null);
-
-      if (
-        goToLoginAfterSignOut.current
-      ) {
-        goToLoginAfterSignOut.current =
-          false;
-
-        setCurrentScreen('login');
-      } else {
-        setCurrentScreen('welcome');
-      }
-
-      return;
-    }
-
-    // VERIFY EMAIL BEFORE ENTERING APP
-    if (!user.emailVerified) {
-      setCurrentScreen('verifyEmail');
-      return;
-    }
-
-    // MFA MUST BE SET UP
-    if (!userHasMFA(user)) {
-      setCurrentScreen('mfaSetup');
-      return;
-    }
-
-    // AUTHENTICATED USER
-    // TERMS ACCEPTANCE IS CHECKED
-    // BEFORE MAIN APP IS DISPLAYED
-    setCurrentScreen('home');
-  };
-
-  // FIREBASE AUTHENTICATION LISTENER
+  // LISTEN FOR FIREBASE AUTHENTICATION
   useEffect(() => {
     const unsubscribe =
-      listenToAuthState(user => {
-        routeUser(user);
-        setCheckingLogin(false);
-      });
+      listenToAuthState(
+        (user: User | null) => {
+          // NOT LOGGED IN
+          if (!user) {
+            setTermsAcceptedUid(null);
+
+            if (
+              goToLoginAfterSignOut.current
+            ) {
+              goToLoginAfterSignOut.current =
+                false;
+
+              setCurrentScreen('login');
+            } else {
+              setCurrentScreen('welcome');
+            }
+          }
+
+          // EMAIL NOT VERIFIED
+          else if (!user.emailVerified) {
+            setCurrentScreen('verifyEmail');
+          }
+
+          // MFA NOT SET UP
+          else if (!userHasMFA(user)) {
+            setCurrentScreen('mfaSetup');
+          }
+
+          // READY TO ENTER MAIN APP
+          else {
+            setCurrentScreen('home');
+          }
+
+          setCheckingLogin(false);
+        },
+      );
 
     return unsubscribe;
   }, []);
 
-  // LOG OUT OF INDIGIPET
+  // SIGN OUT
   const handleLogout = async () => {
     try {
       goToLoginAfterSignOut.current =
@@ -207,11 +212,11 @@ function App() {
     }
   };
 
-  // DISPLAY THE CORRECT SCREEN
+  // RENDER CURRENT SCREEN
   const renderScreen = () => {
     switch (currentScreen) {
 
-      // WELCOME PAGE
+      // WELCOME SCREEN
       case 'welcome':
         return (
           <WelcomeScreen
@@ -224,7 +229,7 @@ function App() {
           />
         );
 
-      // LOGIN PAGE
+      // LOGIN SCREEN
       case 'login':
         return (
           <LoginScreen
@@ -244,7 +249,7 @@ function App() {
           />
         );
 
-      // REGISTER PAGE
+      // REGISTRATION SCREEN
       case 'register':
         return (
           <RegisterScreen
@@ -257,7 +262,7 @@ function App() {
           />
         );
 
-      // EMAIL VERIFICATION
+      // VERIFY EMAIL
       case 'verifyEmail':
         return (
           <VerifyEmailScreen
@@ -270,7 +275,7 @@ function App() {
           />
         );
 
-      // MFA SETUP
+      // MFA SETUP SCREEN
       case 'mfaSetup':
         return (
           <MFASetupScreen
@@ -287,28 +292,26 @@ function App() {
 
                 setCurrentScreen('login');
               } catch (error) {
+                goToLoginAfterSignOut.current =
+                  false;
+
                 console.log(
                   'AUTO LOGOUT ERROR:',
                   error,
                 );
-
-                goToLoginAfterSignOut.current =
-                  false;
 
                 Alert.alert(
                   'Setup Complete',
                   'MFA setup completed, but automatic logout failed. Please log out from Settings.',
                 );
 
-                // STILL PROTECTED BY
-                // TERMS ACCEPTANCE SCREEN
                 setCurrentScreen('home');
               }
             }}
           />
         );
 
-      // MFA VERIFICATION
+      // MFA VERIFICATION SCREEN
       case 'mfaVerify':
         if (!mfaResolver) {
           return (
@@ -336,7 +339,6 @@ function App() {
             onComplete={() => {
               setMFAResolver(null);
 
-              // CHECK TERMS BEFORE HOME
               setCurrentScreen('home');
             }}
             onCancel={() => {
@@ -353,6 +355,7 @@ function App() {
       case 'settings': {
         const user = getCurrentUser();
 
+        // USER MUST BE LOGGED IN
         if (!user) {
           return (
             <View
@@ -366,8 +369,7 @@ function App() {
           );
         }
 
-        // REQUIRE TERMS OF SERVICE
-        // BEFORE ENTERING MAIN APP
+        // TERMS ACCEPTANCE REQUIRED
         if (
           termsAcceptedUid !== user.uid
         ) {
@@ -382,8 +384,7 @@ function App() {
           );
         }
 
-        // USER ACCEPTED TERMS
-        // SHOW HOME / LEARNING / SETTINGS
+        // MAIN APP LAYOUT
         return (
           <View style={styles.mainLayout}>
 
@@ -406,7 +407,9 @@ function App() {
                   email={
                     user.email ?? ''
                   }
-                  onLogout={handleLogout}
+                  onLogout={
+                    handleLogout
+                  }
                   onReturnHome={() =>
                     setCurrentScreen('home')
                   }
@@ -423,7 +426,11 @@ function App() {
                 return (
                   <TouchableOpacity
                     key={tab.id}
-                    style={styles.bottomItem}
+                    style={[
+                      styles.bottomItem,
+                      selected &&
+                        styles.bottomItemSelected,
+                    ]}
                     onPress={() =>
                       setCurrentScreen(tab.id)
                     }
@@ -432,18 +439,19 @@ function App() {
                       selected,
                     }}>
 
+                    {/* SMALL ICON */}
                     <Text
                       style={styles.bottomIcon}>
                       {tab.icon}
                     </Text>
 
+                    {/* VISIBLE LABEL */}
                     <Text
                       style={[
                         styles.bottomText,
                         selected &&
                           styles.bottomTextSelected,
                       ]}>
-
                       {tab.label}
                     </Text>
                   </TouchableOpacity>
@@ -454,7 +462,7 @@ function App() {
         );
       }
 
-      // DEFAULT WELCOME PAGE
+      // DEFAULT
       default:
         return (
           <WelcomeScreen
@@ -469,38 +477,55 @@ function App() {
     }
   };
 
-  // LOADING SAVED LOGIN
-  if (checkingLogin) {
-    return (
-      <View style={styles.container}>
-        
-      <StatusBar barStyle="light-content" />
-
-        <View
-          style={styles.loadingContainer}>
-
-          <ActivityIndicator
-            size="large"
-            color="#035643"
-          />
-
-          <Text style={styles.loadingText}>
-            Loading IndigiPet...
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  // MAIN APP LAYOUT
+  // APP ROOT
   return (
     <View style={styles.container}>
 
       {/* ANDROID STATUS BAR */}
-      
-      <StatusBar barStyle="light-content" />
+      <StatusBar
+        barStyle="light-content"
+      />
 
-      {renderScreen()}
+      {/* TOP SAFE AREA */}
+      <View
+        style={[
+          styles.topSafeArea,
+          {
+            height: topInset,
+          },
+        ]}
+      />
+
+      {/* APP CONTENT */}
+      <View style={styles.appContent}>
+        {checkingLogin ? (
+          <View
+            style={styles.loadingContainer}>
+
+            <ActivityIndicator
+              size="large"
+              color="#035643"
+            />
+
+            <Text
+              style={styles.loadingText}>
+              Loading IndigiPet...
+            </Text>
+          </View>
+        ) : (
+          renderScreen()
+        )}
+      </View>
+
+      {/* BOTTOM SAFE AREA */}
+      <View
+        style={[
+          styles.bottomSafeArea,
+          {
+            height: bottomInset,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -508,12 +533,25 @@ function App() {
 // STYLES
 const styles = StyleSheet.create({
 
-  // MAIN FIX FOR STATUS BAR
   container: {
     flex: 1,
     backgroundColor: '#035643',
-    paddingTop:
-      ANDROID_STATUS_BAR_HEIGHT,
+  },
+
+  // AREA BEHIND ANDROID CLOCK
+  topSafeArea: {
+    backgroundColor: '#035643',
+  },
+
+  // AREA BEHIND ANDROID SYSTEM BUTTONS
+  bottomSafeArea: {
+    backgroundColor: '#FFFBF0',
+  },
+
+  // SCREEN CONTENT
+  appContent: {
+    flex: 1,
+    backgroundColor: '#FFFBEF',
   },
 
   loadingContainer: {
@@ -536,32 +574,47 @@ const styles = StyleSheet.create({
 
   mainContent: {
     flex: 1,
+    minHeight: 0,
   },
 
-  // BOTTOM NAVIGATION BAR
+  // SMALL BOTTOM NAVIGATION
   bottomBar: {
+    height: 56,
     flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFBF0',
     borderTopWidth: 1,
     borderTopColor: '#E5DAC8',
-    paddingVertical: 9,
-    paddingBottom: 13,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
 
   bottomItem: {
     flex: 1,
+    height: 46,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 9,
+    marginHorizontal: 3,
   },
 
+  // SELECTED TAB COLOUR
+  bottomItemSelected: {
+    backgroundColor: '#DFEFE7',
+  },
+
+  // SMALLER ICONS
   bottomIcon: {
-    fontSize: 24,
+    fontSize: 18,
+    includeFontPadding: false,
   },
 
+  // CLEAR TEXT
   bottomText: {
     fontSize: 11,
-    color: '#6E6151',
+    color: '#484139',
     marginTop: 3,
+    includeFontPadding: false,
   },
 
   bottomTextSelected: {
@@ -570,4 +623,11 @@ const styles = StyleSheet.create({
   },
 });
 
-export default App;
+// WRAP APP WITH SAFE AREA PROVIDER
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
+  );
+}

@@ -1,14 +1,8 @@
 
-import React, {
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
-
+import React, {useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -62,15 +56,13 @@ type SaveState =
   | 'saved'
   | 'error';
 
-function uniqueId(): string {
+function uniqueId() {
   return (
-    String(Date.now()) +
-    '-' +
+    `${Date.now()}-` +
     Math.random().toString(36).slice(2, 12)
   );
 }
 
-// MATCH LEARNING PAGE COLOURS
 const TIER_COLORS: Record<
   MasteryTier,
   {
@@ -144,7 +136,7 @@ export default function QuizScreen({
   const savingLock = useRef(false);
   const sessionId = useRef(uniqueId());
 
-  // LOAD SAVED LEARNING PROGRESS
+  // LOAD QUIZ DATA
   useEffect(() => {
     let active = true;
 
@@ -174,7 +166,7 @@ export default function QuizScreen({
 
         if (nextPool.length < 4) {
           throw new Error(
-            'Not enough words for four answer options.',
+            'Not enough words for four answers.',
           );
         }
 
@@ -184,9 +176,7 @@ export default function QuizScreen({
           null,
         );
 
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         setStartingProgress(progress);
         setDraftProgress(progress);
@@ -195,15 +185,12 @@ export default function QuizScreen({
         setOptions(answerOptions(first));
         setPhase('playing');
       } catch (error: any) {
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         setLoadError(
           error?.message ||
-            'Could not load learning progress.',
+            'Could not load quiz progress.',
         );
-
         setPhase('error');
       }
     };
@@ -219,8 +206,7 @@ export default function QuizScreen({
     answer => answer.correct,
   ).length;
 
-  const rewards =
-    calculateRewards(score);
+  const rewards = calculateRewards(score);
 
   const answeredThisQuestion =
     selectedId !== null;
@@ -229,7 +215,13 @@ export default function QuizScreen({
     current && selectedId === current.id,
   );
 
-  // CHECK AN ANSWER
+  const questionNumber = Math.min(
+    answers.length +
+      (selectedId ? 0 : 1),
+    QUESTIONS_PER_SESSION,
+  );
+
+  // SELECT ANSWER
   const chooseAnswer = (id: string) => {
     if (
       !current ||
@@ -261,14 +253,12 @@ export default function QuizScreen({
     );
   };
 
-  // SAVE REWARDS IN FIREBASE
+  // SAVE REWARDS
   const saveFinishedQuiz = async (
     finalAnswers: AnswerEvent[],
     finalProgress: CategoryQuizProgress,
   ) => {
-    if (savingLock.current) {
-      return;
-    }
+    if (savingLock.current) return;
 
     savingLock.current = true;
 
@@ -292,7 +282,7 @@ export default function QuizScreen({
     } catch (error: any) {
       setSaveError(
         error?.message ||
-          'Could not save the quiz.',
+          'Could not save the completed quiz.',
       );
 
       setSaveState('error');
@@ -336,17 +326,16 @@ export default function QuizScreen({
     setSelectedId(null);
   };
 
-  // GO BACK
+  // BACK
   const back = () => {
     if (
       phase === 'results' &&
       saveState !== 'saved'
     ) {
       Alert.alert(
-        'Save Incomplete',
-        'Save your quiz progress before leaving.',
+        'Save incomplete',
+        'Save your progress before leaving.',
       );
-
       return;
     }
 
@@ -359,10 +348,7 @@ export default function QuizScreen({
       'Leave Quiz?',
       'Your unfinished answers will not be saved.',
       [
-        {
-          text: 'Stay',
-          style: 'cancel',
-        },
+        {text: 'Stay', style: 'cancel'},
         {
           text: 'Leave',
           style: 'destructive',
@@ -378,13 +364,12 @@ export default function QuizScreen({
   const wordResults =
     QUIZ_WORDS[categoryId].filter(word =>
       answers.some(
-        answer =>
-          answer.wordId === word.id,
+        answer => answer.wordId === word.id,
       ),
     );
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <View style={styles.screen}>
       <StatusBar barStyle="light-content" />
 
       {/* HEADER */}
@@ -392,9 +377,7 @@ export default function QuizScreen({
         <TouchableOpacity
           onPress={back}
           style={styles.back}
-          accessibilityRole="button"
           accessibilityLabel="Back to Learning">
-
           <Text style={styles.backText}>
             ‹
           </Text>
@@ -412,11 +395,7 @@ export default function QuizScreen({
 
         {phase === 'playing' && (
           <Text style={styles.counter}>
-            {Math.min(
-              answers.length +
-                (selectedId ? 0 : 1),
-              7,
-            )}{' / 7'}
+            {questionNumber} / {QUESTIONS_PER_SESSION}
           </Text>
         )}
       </View>
@@ -429,7 +408,7 @@ export default function QuizScreen({
             color="#089BA1"
           />
 
-          <Text style={styles.small}>
+          <Text style={styles.info}>
             Loading your learning progress...
           </Text>
         </View>
@@ -438,19 +417,18 @@ export default function QuizScreen({
       {/* ERROR */}
       {phase === 'error' && (
         <View style={styles.center}>
-          <Text style={styles.title}>
+          <Text style={styles.sectionHeading}>
             Could not start quiz
           </Text>
 
-          <Text style={styles.paragraph}>
+          <Text style={styles.info}>
             {loadError}
           </Text>
 
           <TouchableOpacity
             style={styles.primary}
             onPress={restart}>
-
-            <Text style={styles.primaryText}>
+            <Text style={styles.buttonText}>
               Try Again
             </Text>
           </TouchableOpacity>
@@ -458,7 +436,6 @@ export default function QuizScreen({
           <TouchableOpacity
             style={styles.outlineButton}
             onPress={onExit}>
-
             <Text style={styles.outlineText}>
               Back to Learning
             </Text>
@@ -466,134 +443,109 @@ export default function QuizScreen({
         </View>
       )}
 
-      {/* QUIZ QUESTIONS */}
-      {phase === 'playing' &&
-        current && (
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.content}>
-
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: (
-                      String(
-                        (answers.length / 7) *
-                          100,
-                      ) + '%'
-                    ) as DimensionValue,
-                  },
-                ]}
-              />
-            </View>
-
-            <Text style={styles.eyebrow}>
-              QUESTION{' '}
-              {Math.min(
-                answers.length +
-                  (selectedId ? 0 : 1),
-                7,
-              )}{' OF 7'}
-            </Text>
-
-            <Text style={styles.title}>
-              Choose the Ojibwe word for:
-            </Text>
-
-            <View style={styles.promptCard}>
-              <Text style={styles.prompt}>
-                {current.word_english}
-              </Text>
-
-              <Text style={styles.audioNote}>
-                Text mode · Audio will be added
-                when recordings are approved
-              </Text>
-            </View>
-
-            {/* FOUR ANSWERS */}
-            <View style={styles.answers}>
-              {options.map(
-                (option, index) => {
-                  const isCorrectOption =
-                    option.id === current.id;
-
-                  const isSelected =
-                    option.id === selectedId;
-
-                  const showCorrect =
-                    answeredThisQuestion &&
-                    isCorrectOption;
-
-                  const showWrong =
-                    answeredThisQuestion &&
-                    isSelected &&
-                    !isCorrectOption;
-
-                  return (
-                    <TouchableOpacity
-                      key={option.id}
-                      onPress={() =>
-                        chooseAnswer(
-                          option.id,
-                        )
-                      }
-                      disabled={
-                        answeredThisQuestion
-                      }
-                      accessibilityRole="button"
-                      style={[
-                        styles.answer,
-                        showCorrect &&
-                          styles.correctAnswer,
-                        showWrong &&
-                          styles.wrongAnswer,
-                      ]}>
-
-                      <Text
-                        style={styles.optionLetter}>
-                        {
-                          ['A', 'B', 'C', 'D'][
-                            index
-                          ]
-                        }
-                      </Text>
-
-                      <Text
-                        style={styles.answerText}>
-                        {option.word_ojibwe}
-                      </Text>
-
-                      {showCorrect && (
-                        <Text
-                          style={styles.answerMark}>
-                          ✓
-                        </Text>
-                      )}
-
-                      {showWrong && (
-                        <Text
-                          style={styles.answerMark}>
-                          ✕
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  );
+      {/* PLAYING */}
+      {phase === 'playing' && current && (
+        <View style={styles.playArea}>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${
+                    (answers.length /
+                      QUESTIONS_PER_SESSION) *
+                    100
+                  }%` as DimensionValue,
                 },
-              )}
-            </View>
+              ]}
+            />
+          </View>
 
-            {answeredThisQuestion && (
-              <View
-                style={[
-                  styles.feedback,
-                  isCurrentCorrect
-                    ? styles.feedbackGood
-                    : styles.feedbackBad,
-                ]}>
+          <Text style={styles.eyebrow}>
+            QUESTION {questionNumber} OF{' '}
+            {QUESTIONS_PER_SESSION}
+          </Text>
 
+          <Text style={styles.questionTitle}>
+            Choose the Ojibwe word for:
+          </Text>
+
+          <View style={styles.promptCard}>
+            <Text style={styles.prompt}>
+              {current.word_english}
+            </Text>
+
+            <Text style={styles.audioNote}>
+              Text mode · Audio will be added
+              when recordings are approved
+            </Text>
+          </View>
+
+          {/* FOUR EQUAL-SIZE ANSWER BUTTONS */}
+          <View style={styles.answers}>
+            {options.map((option, index) => {
+              const showCorrect =
+                answeredThisQuestion &&
+                option.id === current.id;
+
+              const showWrong =
+                answeredThisQuestion &&
+                selectedId === option.id &&
+                option.id !== current.id;
+
+              return (
+                <TouchableOpacity
+                  key={option.id}
+                  style={[
+                    styles.answer,
+                    showCorrect &&
+                      styles.correctAnswer,
+                    showWrong &&
+                      styles.wrongAnswer,
+                  ]}
+                  disabled={answeredThisQuestion}
+                  onPress={() =>
+                    chooseAnswer(option.id)
+                  }
+                  accessibilityRole="button">
+
+                  <Text style={styles.optionLetter}>
+                    {['A', 'B', 'C', 'D'][index]}
+                  </Text>
+
+                  <Text style={styles.answerText}>
+                    {option.word_ojibwe}
+                  </Text>
+
+                  {showCorrect && (
+                    <Text style={styles.answerMark}>
+                      ✓
+                    </Text>
+                  )}
+
+                  {showWrong && (
+                    <Text style={styles.answerMark}>
+                      ✕
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* FEEDBACK */}
+          <View
+            style={[
+              styles.feedback,
+              answeredThisQuestion
+                ? isCurrentCorrect
+                  ? styles.feedbackGood
+                  : styles.feedbackBad
+                : styles.feedbackIdle,
+            ]}>
+
+            {answeredThisQuestion ? (
+              <>
                 <Text style={styles.feedbackTitle}>
                   {isCurrentCorrect
                     ? 'Great job!'
@@ -605,51 +557,63 @@ export default function QuizScreen({
                   {' = '}
                   {current.word_english}
                 </Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={[
-                styles.next,
-                !answeredThisQuestion &&
-                  styles.disabled,
-              ]}
-              disabled={
-                !answeredThisQuestion
-              }
-              onPress={nextQuestion}>
-
-              <Text style={styles.nextText}>
-                {answers.length === 7
-                  ? 'See Results'
-                  : 'Next Question →'}
+              </>
+            ) : (
+              <Text style={styles.feedbackHint}>
+                Select one answer to continue.
               </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
+            )}
+          </View>
 
-      {/* QUIZ RESULTS */}
+          {/* NEXT BUTTON */}
+          <TouchableOpacity
+            style={[
+              styles.next,
+              !answeredThisQuestion &&
+                styles.disabled,
+            ]}
+            disabled={!answeredThisQuestion}
+            onPress={nextQuestion}>
+
+            <Text style={styles.buttonText}>
+              {answers.length ===
+              QUESTIONS_PER_SESSION
+                ? 'See Results'
+                : 'Next Question →'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* RESULTS */}
       {phase === 'results' && (
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}>
-
-          <Text style={styles.eyebrow}>
-            SESSION COMPLETE
-          </Text>
-
-          <Text style={styles.title}>
-            You spent time learning with Esiban!
-          </Text>
+          style={styles.resultsScroll}
+          contentContainerStyle={
+            styles.resultsContent
+          }
+          showsVerticalScrollIndicator={false}>
 
           <View style={styles.scoreCard}>
-            <Text style={styles.scoreBig}>
-              {score} / 7
-            </Text>
+            <View>
+              <Text style={styles.scoreBig}>
+                {score} / {QUESTIONS_PER_SESSION}
+              </Text>
 
-            <Text style={styles.scoreLabel}>
-              Correct answers
-            </Text>
+              <Text style={styles.scoreLabel}>
+                Correct answers
+              </Text>
+            </View>
+
+            <View style={styles.scoreRight}>
+              <Text style={styles.completeLabel}>
+                SESSION COMPLETE
+              </Text>
+
+              <Text style={styles.completeText}>
+                Great learning with Esiban!
+              </Text>
+            </View>
           </View>
 
           {/* REWARDS */}
@@ -658,7 +622,6 @@ export default function QuizScreen({
               <Text style={styles.rewardBig}>
                 +{rewards.xp}
               </Text>
-
               <Text style={styles.rewardLabel}>
                 XP
               </Text>
@@ -668,7 +631,6 @@ export default function QuizScreen({
               <Text style={styles.rewardBig}>
                 +{rewards.coins}
               </Text>
-
               <Text style={styles.rewardLabel}>
                 Coins
               </Text>
@@ -678,167 +640,165 @@ export default function QuizScreen({
               <Text style={styles.rewardBig}>
                 +{rewards.friendship}%
               </Text>
-
               <Text style={styles.rewardLabel}>
                 Friendship
               </Text>
             </View>
           </View>
 
-          {/* COLOURED WORD PROGRESS */}
           <Text style={styles.sectionHeading}>
             Words practiced
           </Text>
 
-          {wordResults.map(word => {
-            const before: MasteryTier =
-              startingProgress.words[
-                word.id
-              ]?.tier ?? 'new';
+          {/* COLOURED MASTERY RESULTS */}
+          <View style={styles.wordGrid}>
+            {wordResults.map(word => {
+              const before: MasteryTier =
+                startingProgress.words[word.id]
+                  ?.tier ?? 'new';
 
-            const after: MasteryTier =
-              draftProgress.words[
-                word.id
-              ]?.tier ?? 'new';
+              const after: MasteryTier =
+                draftProgress.words[word.id]
+                  ?.tier ?? 'new';
 
-            return (
-              <View
-                style={styles.wordRow}
-                key={word.id}>
+              return (
+                <View
+                  key={word.id}
+                  style={styles.wordCard}>
 
-                <Text style={styles.wordTitle}>
-                  {word.word_ojibwe}
-                  {' = '}
-                  {word.word_english}
-                </Text>
-
-                <View style={styles.masteryRow}>
-                  <View
-                    style={[
-                      styles.tierBadge,
-                      {
-                        backgroundColor:
-                          TIER_COLORS[before]
-                            .backgroundColor,
-                      },
-                    ]}>
-
-                    <Text
-                      style={[
-                        styles.tierText,
-                        {
-                          color:
-                            TIER_COLORS[before]
-                              .color,
-                        },
-                      ]}>
-
-                      {tierLabel(before)}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.tierArrow}>
-                    →
+                  <Text style={styles.wordTitle}>
+                    {word.word_ojibwe}
+                    {' = '}
+                    {word.word_english}
                   </Text>
 
-                  <View
-                    style={[
-                      styles.tierBadge,
-                      {
-                        backgroundColor:
-                          TIER_COLORS[after]
-                            .backgroundColor,
-                      },
-                    ]}>
-
-                    <Text
+                  <View style={styles.masteryRow}>
+                    <View
                       style={[
-                        styles.tierText,
+                        styles.tierBadge,
                         {
-                          color:
-                            TIER_COLORS[after]
-                              .color,
+                          backgroundColor:
+                            TIER_COLORS[before]
+                              .backgroundColor,
                         },
                       ]}>
 
-                      {tierLabel(after)}
+                      <Text
+                        style={[
+                          styles.tierText,
+                          {
+                            color:
+                              TIER_COLORS[before]
+                                .color,
+                          },
+                        ]}>
+                        {tierLabel(before)}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.tierArrow}>
+                      →
                     </Text>
+
+                    <View
+                      style={[
+                        styles.tierBadge,
+                        {
+                          backgroundColor:
+                            TIER_COLORS[after]
+                              .backgroundColor,
+                        },
+                      ]}>
+
+                      <Text
+                        style={[
+                          styles.tierText,
+                          {
+                            color:
+                              TIER_COLORS[after]
+                                .color,
+                          },
+                        ]}>
+                        {tierLabel(after)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            );
-          })}
+              );
+            })}
+          </View>
 
-          {/* FIREBASE SAVE STATUS */}
-          {saveState === 'saving' && (
-            <Text style={styles.small}>
-              Saving rewards and progress
-              to Firebase...
-            </Text>
-          )}
-
-          {saveState === 'saved' && (
-            <Text style={styles.savedText}>
-              ✓ Progress saved successfully
-            </Text>
-          )}
-
-          {saveState === 'error' && (
-            <View style={styles.feedbackBad}>
-              <Text style={styles.feedbackTitle}>
-                Save not complete
+          {/* SAVE STATUS */}
+          <View style={styles.saveArea}>
+            {saveState === 'saving' && (
+              <Text style={styles.info}>
+                Saving progress...
               </Text>
+            )}
 
-              <Text style={styles.paragraph}>
-                {saveError}
+            {saveState === 'saved' && (
+              <Text style={styles.savedText}>
+                ✓ Progress saved successfully
               </Text>
+            )}
 
-              <TouchableOpacity
-                style={styles.next}
-                onPress={() =>
-                  void saveFinishedQuiz(
-                    answers,
-                    draftProgress,
-                  )
-                }>
-
-                <Text style={styles.nextText}>
-                  Retry Save
+            {saveState === 'error' && (
+              <>
+                <Text style={styles.errorText}>
+                  {saveError}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
-          <TouchableOpacity
-            style={[
-              styles.primary,
-              saveState !== 'saved' &&
-                styles.disabled,
-            ]}
-            disabled={saveState !== 'saved'}
-            onPress={restart}>
+                <TouchableOpacity
+                  style={styles.primary}
+                  onPress={() =>
+                    void saveFinishedQuiz(
+                      answers,
+                      draftProgress,
+                    )
+                  }>
+                  <Text style={styles.buttonText}>
+                    Retry Save
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
 
-            <Text style={styles.primaryText}>
-              Play Again
-            </Text>
-          </TouchableOpacity>
+          {/* RESULT BUTTONS */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[
+                styles.primary,
+                styles.actionHalf,
+                saveState !== 'saved' &&
+                  styles.disabled,
+              ]}
+              disabled={saveState !== 'saved'}
+              onPress={restart}>
 
-          <TouchableOpacity
-            style={[
-              styles.outlineButton,
-              saveState !== 'saved' &&
-                styles.disabled,
-            ]}
-            disabled={saveState !== 'saved'}
-            onPress={onExit}>
+              <Text style={styles.buttonText}>
+                Play Again
+              </Text>
+            </TouchableOpacity>
 
-            <Text style={styles.outlineText}>
-              Back to Learning
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.outlineButton,
+                styles.actionHalf,
+                saveState !== 'saved' &&
+                  styles.disabled,
+              ]}
+              disabled={saveState !== 'saved'}
+              onPress={onExit}>
+
+              <Text style={styles.outlineText}>
+                Back to Learning
+              </Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -849,71 +809,68 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    minHeight: 80,
+    height: 54,
     backgroundColor: '#035643',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
   },
 
   back: {
-    width: 38,
-    paddingVertical: 8,
+    width: 34,
+    justifyContent: 'center',
   },
 
   backText: {
-    fontSize: 35,
-    color: '#FFFBEF',
+    fontSize: 31,
+    color: '#FFFFFF',
   },
 
   headerTitle: {
-    fontSize: 23,
-    color: '#FFFBEF',
+    fontSize: 20,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
 
   headerSub: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#D8ECE5',
-    marginTop: 2,
   },
 
   counter: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#FFFBEF',
-  },
-
-  scroll: {
-    flex: 1,
-  },
-
-  content: {
-    padding: 18,
-    paddingBottom: 40,
+    color: '#FFFFFF',
   },
 
   center: {
     flex: 1,
-    padding: 26,
+    padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
 
-  small: {
+  info: {
     fontSize: 13,
-    color: '#6E6151',
-    marginVertical: 12,
+    color: '#554E43',
     textAlign: 'center',
   },
 
+  // QUIZ LAYOUT
+  playArea: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+
   progressTrack: {
-    height: 10,
-    borderRadius: 10,
+    height: 7,
     backgroundColor: '#F3E9CF',
+    borderRadius: 7,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 7,
   },
 
   progressFill: {
@@ -922,102 +879,103 @@ const styles = StyleSheet.create({
   },
 
   eyebrow: {
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 0.7,
     color: '#08797A',
-    fontWeight: '800',
-    letterSpacing: 1.3,
-    marginBottom: 12,
+    marginBottom: 4,
   },
 
-  title: {
-    fontSize: 24,
+  questionTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#035643',
-    lineHeight: 31,
-    marginBottom: 12,
-  },
-
-  paragraph: {
-    fontSize: 15,
-    color: '#292521',
-    lineHeight: 22,
-    textAlign: 'center',
+    marginBottom: 8,
   },
 
   promptCard: {
+    minHeight: 83,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E3DACB',
-    borderRadius: 15,
-    padding: 18,
     backgroundColor: '#FFFBF0',
     alignItems: 'center',
-    marginBottom: 18,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
 
   prompt: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: 'bold',
     color: '#035643',
-    marginBottom: 10,
     textAlign: 'center',
   },
 
   audioNote: {
-    color: '#6E6151',
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#554E43',
     textAlign: 'center',
-    fontSize: 12,
-    lineHeight: 18,
+    marginTop: 4,
   },
 
+  // ANSWERS EXPAND TO FILL AVAILABLE SPACE
   answers: {
-    gap: 11,
+    flex: 1,
+    minHeight: 0,
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 8,
   },
 
   answer: {
-    backgroundColor: '#089BA1',
+    flex: 1,
+    minHeight: 42,
     borderRadius: 10,
-    minHeight: 57,
+    backgroundColor: '#089BA1',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    borderBottomWidth: 3,
-    borderBottomColor: '#08797A',
+    paddingHorizontal: 12,
   },
 
   correctAnswer: {
     backgroundColor: '#168600',
-    borderBottomColor: '#126500',
   },
 
   wrongAnswer: {
     backgroundColor: '#B23F38',
-    borderBottomColor: '#922A26',
   },
 
   optionLetter: {
-    width: 30,
-    color: '#FFFFFF',
+    width: 29,
     fontSize: 17,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
 
   answerText: {
-    color: '#FFFFFF',
     flex: 1,
-    fontSize: 18,
+    fontSize: 17,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
 
   answerMark: {
+    fontSize: 23,
     color: '#FFFFFF',
-    fontSize: 22,
     fontWeight: 'bold',
   },
 
   feedback: {
-    marginTop: 17,
-    borderRadius: 10,
-    padding: 13,
+    height: 56,
+    borderRadius: 9,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+
+  feedbackIdle: {
+    backgroundColor: '#F5F0E7',
   },
 
   feedbackGood: {
@@ -1026,175 +984,234 @@ const styles = StyleSheet.create({
 
   feedbackBad: {
     backgroundColor: '#FBE7E5',
-    borderRadius: 10,
-    padding: 13,
-    marginTop: 17,
   },
 
   feedbackTitle: {
-    color: '#292521',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: '#292521',
   },
 
   feedbackText: {
-    fontSize: 15,
+    fontSize: 13,
     color: '#292521',
+    marginTop: 2,
+  },
+
+  feedbackHint: {
+    fontSize: 13,
+    color: '#554E43',
+    textAlign: 'center',
   },
 
   next: {
+    height: 46,
+    borderRadius: 10,
     backgroundColor: '#EC6E00',
-    borderRadius: 10,
-    minHeight: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 19,
+    marginTop: 8,
   },
 
-  nextText: {
-    fontSize: 17,
+  buttonText: {
+    fontSize: 15,
+    fontWeight: 'bold',
     color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-
-  primary: {
-    backgroundColor: '#089BA1',
-    borderRadius: 10,
-    minHeight: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-    alignSelf: 'stretch',
-  },
-
-  primaryText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-
-  outlineButton: {
-    borderColor: '#089BA1',
-    borderWidth: 2,
-    borderRadius: 10,
-    minHeight: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    alignSelf: 'stretch',
-  },
-
-  outlineText: {
-    color: '#035643',
-    fontWeight: 'bold',
-    fontSize: 16,
   },
 
   disabled: {
     opacity: 0.45,
   },
 
+  // RESULTS PAGE
+  resultsScroll: {
+    flex: 1,
+  },
+
+  resultsContent: {
+    flexGrow: 1,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+
   scoreCard: {
     backgroundColor: '#035643',
-    padding: 25,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    marginVertical: 10,
+    justifyContent: 'space-between',
   },
 
   scoreBig: {
-    fontSize: 43,
-    color: '#FFFBEF',
+    fontSize: 28,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
 
   scoreLabel: {
-    fontSize: 16,
+    fontSize: 11,
     color: '#FFFBEF',
+  },
+
+  scoreRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+    marginLeft: 8,
+  },
+
+  completeLabel: {
+    fontSize: 11,
+    color: '#C8EDE0',
+    fontWeight: 'bold',
+  },
+
+  completeText: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    textAlign: 'right',
   },
 
   rewardRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 13,
-    marginBottom: 22,
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 9,
   },
 
   rewardCard: {
     flex: 1,
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E3DACB',
-    borderRadius: 10,
+    borderRadius: 9,
     backgroundColor: '#FFFBF0',
-    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingVertical: 4,
   },
 
   rewardBig: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#035643',
   },
 
   rewardLabel: {
-    fontSize: 12,
-    marginTop: 4,
-    color: '#6E6151',
+    fontSize: 11,
+    color: '#554E43',
   },
 
   sectionHeading: {
-    fontSize: 19,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#035643',
-    marginBottom: 9,
-  },
-
-  wordRow: {
-    padding: 12,
-    borderColor: '#E3DACB',
-    borderWidth: 1,
-    backgroundColor: '#FFFBF0',
-    borderRadius: 9,
     marginBottom: 7,
   },
 
+  wordGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+
+  wordCard: {
+    width: '49%',
+    minHeight: 60,
+    paddingHorizontal: 7,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#E3DACB',
+    borderRadius: 9,
+    backgroundColor: '#FFFBF0',
+    justifyContent: 'center',
+  },
+
   wordTitle: {
-    fontSize: 15,
-    color: '#292521',
+    fontSize: 12,
+    lineHeight: 15,
     fontWeight: '600',
+    color: '#292521',
   },
 
   masteryRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
+    gap: 3,
+    marginTop: 4,
   },
 
   tierBadge: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 5,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
   },
 
   tierText: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: 'bold',
   },
 
   tierArrow: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#484139',
+    fontSize: 10,
+    color: '#554E43',
+  },
+
+  saveArea: {
+    minHeight: 22,
+    justifyContent: 'center',
+    marginTop: 5,
   },
 
   savedText: {
-    color: '#168600',
+    fontSize: 12,
     fontWeight: 'bold',
-    fontSize: 15,
-    marginVertical: 12,
+    color: '#168600',
     textAlign: 'center',
+  },
+
+  errorText: {
+    fontSize: 12,
+    color: '#B23F38',
+    textAlign: 'center',
+  },
+
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 'auto',
+  },
+
+  actionHalf: {
+    flex: 1,
+  },
+
+  primary: {
+    height: 43,
+    backgroundColor: '#089BA1',
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+
+  outlineButton: {
+    height: 43,
+    borderRadius: 9,
+    borderColor: '#089BA1',
+    backgroundColor: '#FFFBF0',
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+
+  outlineText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#035643',
   },
 });
