@@ -1,5 +1,6 @@
 
 import React, {useEffect, useState} from 'react';
+
 import {
   ActivityIndicator,
   Alert,
@@ -29,6 +30,8 @@ import {
   subscribeGameData,
   type GameData,
 } from '../services/gameService';
+
+import CoinIcon from '../../assets/icons/coin-icon.svg';
 
 type Props = {
   uid: string;
@@ -60,30 +63,69 @@ const FOOD_SPEECH: Record<string, string> = {
 };
 
 function ProgressBar({value}: {value: number}) {
-  const safe = Math.max(0, Math.min(100, Number(value) || 0));
+  const safe = Math.max(
+    0,
+    Math.min(100, Number(value) || 0),
+  );
 
   return (
     <View style={styles.barTrack}>
       <View
         style={[
           styles.barFill,
-          {width: `${safe}%` as DimensionValue},
+          {
+            width: `${safe}%` as DimensionValue,
+          },
         ]}
       />
     </View>
   );
 }
 
+function CoinAmount({
+  amount,
+  small = false,
+}: {
+  amount: number;
+  small?: boolean;
+}) {
+  return (
+    <View style={styles.coinRow}>
+      <CoinIcon
+        width={small ? 15 : 20}
+        height={small ? 18 : 22}
+      />
+
+      <Text
+        style={
+          small
+            ? styles.foodCost
+            : styles.coins
+        }>
+        {amount}
+      </Text>
+    </View>
+  );
+}
+
 export default function HomeScreen({uid}: Props) {
-  const [game, setGame] = useState<GameData | null>(null);
+  const [game, setGame] =
+    useState<GameData | null>(null);
+
   const [now, setNow] = useState(Date.now());
   const [errorText, setErrorText] = useState('');
   const [feeding, setFeeding] = useState(false);
-  const [dialogueNumber, setDialogueNumber] = useState(0);
-  const [feedSpeech, setFeedSpeech] = useState<string | null>(null);
-  const [lastQuizAt, setLastQuizAt] = useState(0);
 
-  // Load pet data from Firebase
+  const [dialogueNumber, setDialogueNumber] =
+    useState(0);
+
+  const [feedSpeech, setFeedSpeech] =
+    useState<string | null>(null);
+
+  const [lastQuizAt, setLastQuizAt] =
+    useState(0);
+
+  // LOAD AND SUBSCRIBE TO GAME DATA
   useEffect(() => {
     let active = true;
     let unsubscribe = () => {};
@@ -100,6 +142,7 @@ export default function HomeScreen({uid}: Props) {
             if (!active) {
               return;
             }
+
             setGame(saved);
             setErrorText('');
             setNow(Date.now());
@@ -114,11 +157,13 @@ export default function HomeScreen({uid}: Props) {
       .catch((error: any) => {
         if (active) {
           setErrorText(
-            error?.message || 'Unable to load Esiban.',
+            error?.message ||
+              'Unable to load Esiban.',
           );
         }
       });
 
+    // REFRESH HUNGER AND FRIENDSHIP
     const timer = setInterval(() => {
       setNow(Date.now());
     }, 5000);
@@ -140,26 +185,38 @@ export default function HomeScreen({uid}: Props) {
     };
   }, [uid]);
 
-  // Listen for the most recent quiz
+  // RECENT QUIZ SPEECH
   useEffect(() => {
-    const reference = doc(getFirestore(), 'users', uid);
+    const reference = doc(
+      getFirestore(),
+      'users',
+      uid,
+    );
 
     const unsubscribe = onSnapshot(
       reference,
       snapshot => {
-        const event = snapshot.data()?.lastQuizEvent;
+        const event =
+          snapshot.data()?.lastQuizEvent;
+
         setLastQuizAt(
-          typeof event?.at === 'number' ? event.at : 0,
+          typeof event?.at === 'number'
+            ? event.at
+            : 0,
         );
       },
       error => {
-        console.log('Quiz speech error:', error.message);
+        console.log(
+          'Quiz speech error:',
+          error.message,
+        );
       },
     );
 
     return unsubscribe;
   }, [uid]);
 
+  // CLEAR TEMPORARY FOOD SPEECH
   useEffect(() => {
     if (!feedSpeech) {
       return;
@@ -172,7 +229,7 @@ export default function HomeScreen({uid}: Props) {
     return () => clearTimeout(timer);
   }, [feedSpeech]);
 
-  // Feed Esiban
+  // FEED ESIBAN
   const handleFeed = async (item: Food) => {
     if (!game || feeding) {
       return;
@@ -182,10 +239,12 @@ export default function HomeScreen({uid}: Props) {
 
     try {
       await feedPet(uid, item);
+
       setFeedSpeech(
         FOOD_SPEECH[item.id] ||
           'Thank you for feeding me!',
       );
+
       setNow(Date.now());
     } catch (error: any) {
       Alert.alert(
@@ -197,17 +256,22 @@ export default function HomeScreen({uid}: Props) {
     }
   };
 
+  // ERROR STATE
   if (errorText) {
     return (
       <View style={styles.center}>
         <Text style={styles.errorTitle}>
           Unable to load pet data
         </Text>
-        <Text style={styles.helper}>{errorText}</Text>
+
+        <Text style={styles.helper}>
+          {errorText}
+        </Text>
       </View>
     );
   }
 
+  // LOADING STATE
   if (!game) {
     return (
       <View style={styles.center}>
@@ -215,6 +279,7 @@ export default function HomeScreen({uid}: Props) {
           size="large"
           color={COLORS.green}
         />
+
         <Text style={styles.helper}>
           Loading Esiban...
         </Text>
@@ -240,7 +305,8 @@ export default function HomeScreen({uid}: Props) {
     0,
     Math.min(
       100,
-      (level.xpIntoLevel / Math.max(1, level.xpForNext)) *
+      (level.xpIntoLevel /
+        Math.max(1, level.xpForNext)) *
         100,
     ),
   );
@@ -249,19 +315,20 @@ export default function HomeScreen({uid}: Props) {
     <View style={styles.container}>
       <View style={styles.page}>
 
-        {/* XP AND COINS */}
+        {/* XP HEADER */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <View>
-              <Text style={styles.brand}>IndigiPet</Text>
+              <Text style={styles.brand}>
+                IndigiPet
+              </Text>
+
               <Text style={styles.headerSmall}>
                 XP · Level {level.level}
               </Text>
             </View>
 
-            <Text style={styles.coins}>
-              🟠 {game.coins}
-            </Text>
+            <CoinAmount amount={game.coins} />
           </View>
 
           <View style={styles.xpTrack}>
@@ -269,15 +336,16 @@ export default function HomeScreen({uid}: Props) {
               style={[
                 styles.xpFill,
                 {
-                  width: `${xpPercentage}%` as DimensionValue,
+                  width:
+                    `${xpPercentage}%` as DimensionValue,
                 },
               ]}
             />
           </View>
 
           <Text style={styles.xpLabel}>
-            {level.xpIntoLevel} / {level.xpForNext}
-            {' XP to next level'}
+            {level.xpIntoLevel} /{' '}
+            {level.xpForNext} XP to next level
           </Text>
         </View>
 
@@ -290,10 +358,11 @@ export default function HomeScreen({uid}: Props) {
           <Text style={styles.speechText}>
             {speech}
           </Text>
+
           <View style={styles.speechPointer} />
         </TouchableOpacity>
 
-        {/* ORIGINAL RACCOON IMAGE */}
+        {/* ORIGINAL RACCOON PICTURE */}
         <View style={styles.scene}>
           <View style={styles.ground} />
 
@@ -307,17 +376,23 @@ export default function HomeScreen({uid}: Props) {
         {/* FOOD CARDS */}
         <View style={styles.foodRow}>
           {FOODS.map(item => {
-            const cannotAfford = game.coins < item.cost;
+            const cannotAfford =
+              game.coins < item.cost;
 
             return (
               <TouchableOpacity
                 key={item.id}
                 style={[
                   styles.foodCard,
-                  cannotAfford && styles.disabled,
+                  cannotAfford &&
+                    styles.disabled,
                 ]}
-                disabled={feeding || cannotAfford}
-                onPress={() => void handleFeed(item)}>
+                disabled={
+                  feeding || cannotAfford
+                }
+                onPress={() =>
+                  void handleFeed(item)
+                }>
 
                 <Image
                   source={FOOD_IMAGES[item.id]}
@@ -329,9 +404,10 @@ export default function HomeScreen({uid}: Props) {
                   {item.name}
                 </Text>
 
-                <Text style={styles.foodCost}>
-                  🟠 {item.cost}
-                </Text>
+                <CoinAmount
+                  amount={item.cost}
+                  small
+                />
               </TouchableOpacity>
             );
           })}
@@ -343,6 +419,7 @@ export default function HomeScreen({uid}: Props) {
             <Text style={styles.statName}>
               Hunger
             </Text>
+
             <Text style={styles.statValue}>
               {Math.round(stats.hunger)}%
             </Text>
@@ -358,6 +435,7 @@ export default function HomeScreen({uid}: Props) {
             <Text style={styles.statName}>
               Friendship
             </Text>
+
             <Text style={styles.statValue}>
               {Math.round(stats.friendship)}%
             </Text>
@@ -423,6 +501,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginTop: 2,
   },
+  coinRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
   coins: {
     fontSize: 16,
     color: COLORS.gold,
@@ -446,7 +530,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
-  // SPEECH BUBBLE
+  // SPEECH
   speechBubble: {
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -476,7 +560,7 @@ const styles = StyleSheet.create({
     transform: [{rotate: '45deg'}],
   },
 
-  // RACCOON SCENE FILLS AVAILABLE SPACE
+  // RACCOON SCENE
   scene: {
     flex: 1,
     minHeight: 135,
@@ -529,15 +613,15 @@ const styles = StyleSheet.create({
     color: COLORS.brown,
     fontWeight: '600',
     marginTop: 2,
+    marginBottom: 3,
   },
   foodCost: {
     fontSize: 13,
     color: COLORS.orange,
     fontWeight: 'bold',
-    marginTop: 2,
   },
 
-  // PET STATS
+  // HUNGER AND FRIENDSHIP
   statsCard: {
     backgroundColor: COLORS.card,
     borderWidth: 1,

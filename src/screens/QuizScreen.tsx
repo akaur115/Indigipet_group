@@ -1,5 +1,6 @@
 
 import React, {useEffect, useRef, useState} from 'react';
+
 import {
   ActivityIndicator,
   Alert,
@@ -37,14 +38,41 @@ import {
   loadQuizProgress,
 } from '../services/quizService';
 
+import {
+  playWordAudio,
+  stopWordAudio,
+} from '../services/audioService';
+
+// SVG VOLUME ICON
+import VolumeIcon from '../../assets/icons/volume-icon.svg';
+
 type Props = {
   uid: string;
   categoryId: QuizCategoryId;
   onExit: () => void;
 };
 
-type Phase = 'loading' | 'playing' | 'results' | 'error';
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+type Phase =
+  | 'loading'
+  | 'playing'
+  | 'results'
+  | 'error';
+
+type SaveState =
+  | 'idle'
+  | 'saving'
+  | 'saved'
+  | 'error';
+
+const COLORS = {
+  green: '#035643',
+  teal: '#089BA1',
+  cream: '#FFFBEF',
+  card: '#FFFBF0',
+  border: '#E3DACB',
+  brown: '#554E43',
+  orange: '#EC6E00',
+};
 
 const TIER_COLORS: Record<
   MasteryTier,
@@ -64,7 +92,7 @@ const TIER_COLORS: Record<
   },
 };
 
-function uniqueId() {
+function uniqueId(): string {
   return (
     `${Date.now()}-` +
     Math.random().toString(36).slice(2, 12)
@@ -76,31 +104,54 @@ export default function QuizScreen({
   categoryId,
   onExit,
 }: Props) {
-  const [phase, setPhase] = useState<Phase>('loading');
-  const [loadError, setLoadError] = useState('');
-  const [retryNumber, setRetryNumber] = useState(0);
+  const [phase, setPhase] =
+    useState<Phase>('loading');
 
-  const [pool, setPool] = useState<QuizWord[]>([]);
-  const [current, setCurrent] = useState<QuizWord | null>(null);
-  const [options, setOptions] = useState<QuizWord[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [answers, setAnswers] = useState<AnswerEvent[]>([]);
+  const [loadError, setLoadError] =
+    useState('');
+
+  const [retryNumber, setRetryNumber] =
+    useState(0);
+
+  const [pool, setPool] =
+    useState<QuizWord[]>([]);
+
+  const [current, setCurrent] =
+    useState<QuizWord | null>(null);
+
+  const [options, setOptions] =
+    useState<QuizWord[]>([]);
+
+  const [selectedId, setSelectedId] =
+    useState<string | null>(null);
+
+  const [answers, setAnswers] =
+    useState<AnswerEvent[]>([]);
 
   const [startingProgress, setStartingProgress] =
-    useState<CategoryQuizProgress>(emptyProgress());
+    useState<CategoryQuizProgress>(
+      emptyProgress(),
+    );
 
   const [draftProgress, setDraftProgress] =
-    useState<CategoryQuizProgress>(emptyProgress());
+    useState<CategoryQuizProgress>(
+      emptyProgress(),
+    );
 
   const [saveState, setSaveState] =
     useState<SaveState>('idle');
 
-  const [saveError, setSaveError] = useState('');
+  const [saveError, setSaveError] =
+    useState('');
+
+  const [playingAudio, setPlayingAudio] =
+    useState(false);
 
   const savingLock = useRef(false);
   const sessionId = useRef(uniqueId());
+  const audioRequest = useRef(0);
 
-  // LOAD QUIZ DATA
+  // LOAD QUIZ FROM FIREBASE
   useEffect(() => {
     let active = true;
 
@@ -128,7 +179,9 @@ export default function QuizScreen({
         );
 
         if (nextPool.length < 4) {
-          throw new Error('Not enough words for the quiz.');
+          throw new Error(
+            'Not enough words for this quiz.',
+          );
         }
 
         const first = pickQuestionWord(
@@ -148,14 +201,14 @@ export default function QuizScreen({
         setOptions(answerOptions(first));
         setPhase('playing');
       } catch (error: any) {
-        if (!active) {
-          return;
-        }
+        if (active) {
+          setLoadError(
+            error?.message ||
+              'Could not load quiz.',
+          );
 
-        setLoadError(
-          error?.message || 'Could not load quiz progress.',
-        );
-        setPhase('error');
+          setPhase('error');
+        }
       }
     };
 
@@ -166,15 +219,72 @@ export default function QuizScreen({
     };
   }, [uid, categoryId, retryNumber]);
 
+  // STOP AUDIO WHEN QUIZ CLOSES
+  useEffect(() => {
+    return () => {
+      audioRequest.current += 1;
+      stopWordAudio();
+    };
+  }, []);
+
+  const stopAudio = () => {
+    audioRequest.current += 1;
+    stopWordAudio();
+    setPlayingAudio(false);
+  };
+
+  // PLAY WORD AUDIO
+  const handleAudio = async () => {
+    if (
+      !current ||
+      !current.audio_file_path
+    ) {
+      Alert.alert(
+        'Audio unavailable',
+        'This word does not have a recording yet.',
+      );
+      return;
+    }
+
+    if (playingAudio) {
+      stopAudio();
+      return;
+    }
+
+    const request = ++audioRequest.current;
+
+    setPlayingAudio(true);
+
+    try {
+      await playWordAudio(current);
+    } catch (error: any) {
+      if (request === audioRequest.current) {
+        Alert.alert(
+          'Audio Error',
+          error?.message ||
+            'Could not play recording.',
+        );
+      }
+    } finally {
+      if (request === audioRequest.current) {
+        setPlayingAudio(false);
+      }
+    }
+  };
+
+  // CALCULATE SCORE
   const score = answers.filter(
     answer => answer.correct,
   ).length;
 
   const rewards = calculateRewards(score);
-  const answered = selectedId !== null;
+
+  const answered =
+    selectedId !== null;
 
   const isCorrect = Boolean(
-    current && selectedId === current.id,
+    current &&
+    selectedId === current.id,
   );
 
   const questionNumber = Math.min(
@@ -182,7 +292,7 @@ export default function QuizScreen({
     QUESTIONS_PER_SESSION,
   );
 
-  // ANSWER QUESTION
+  // CHOOSE ANSWER
   const chooseAnswer = (id: string) => {
     if (
       !current ||
@@ -214,7 +324,7 @@ export default function QuizScreen({
     );
   };
 
-  // SAVE RESULTS TO FIREBASE
+  // SAVE QUIZ RESULTS
   const saveFinishedQuiz = async (
     finalAnswers: AnswerEvent[],
     finalProgress: CategoryQuizProgress,
@@ -243,8 +353,10 @@ export default function QuizScreen({
       setSaveState('saved');
     } catch (error: any) {
       setSaveError(
-        error?.message || 'Could not save quiz progress.',
+        error?.message ||
+          'Could not save progress.',
       );
+
       setSaveState('error');
     } finally {
       savingLock.current = false;
@@ -261,7 +373,12 @@ export default function QuizScreen({
       return;
     }
 
-    if (answers.length === QUESTIONS_PER_SESSION) {
+    stopAudio();
+
+    if (
+      answers.length ===
+      QUESTIONS_PER_SESSION
+    ) {
       setPhase('results');
 
       void saveFinishedQuiz(
@@ -283,7 +400,7 @@ export default function QuizScreen({
     setSelectedId(null);
   };
 
-  // BACK BUTTON
+  // GO BACK
   const goBack = () => {
     if (
       phase === 'results' &&
@@ -291,48 +408,56 @@ export default function QuizScreen({
     ) {
       Alert.alert(
         'Save incomplete',
-        'Please save your quiz progress before leaving.',
+        'Please save your progress before leaving.',
       );
       return;
     }
 
-    if (phase !== 'playing') {
-      onExit();
+    if (phase === 'playing') {
+      Alert.alert(
+        'Leave Quiz?',
+        'Your unfinished answers will not be saved.',
+        [
+          {
+            text: 'Stay',
+            style: 'cancel',
+          },
+          {
+            text: 'Leave',
+            style: 'destructive',
+            onPress: () => {
+              stopAudio();
+              onExit();
+            },
+          },
+        ],
+      );
+
       return;
     }
 
-    Alert.alert(
-      'Leave Quiz?',
-      'Your unfinished answers will not be saved.',
-      [
-        {
-          text: 'Stay',
-          style: 'cancel',
-        },
-        {
-          text: 'Leave',
-          style: 'destructive',
-          onPress: onExit,
-        },
-      ],
-    );
+    stopAudio();
+    onExit();
   };
 
+  // PLAY AGAIN
   const restart = () => {
+    stopAudio();
     setRetryNumber(value => value + 1);
   };
 
-  const wordResults = QUIZ_WORDS[categoryId].filter(
-    word =>
-      answers.some(
-        answer => answer.wordId === word.id,
-      ),
+  const wordResults = QUIZ_WORDS[
+    categoryId
+  ].filter(word =>
+    answers.some(
+      answer => answer.wordId === word.id,
+    ),
   );
 
   return (
     <View style={styles.screen}>
 
-      {/* HEADER */}
+      {/* QUIZ HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.back}
@@ -354,7 +479,8 @@ export default function QuizScreen({
 
         {phase === 'playing' && (
           <Text style={styles.counter}>
-            {questionNumber} / {QUESTIONS_PER_SESSION}
+            {questionNumber} /{' '}
+            {QUESTIONS_PER_SESSION}
           </Text>
         )}
       </View>
@@ -364,7 +490,7 @@ export default function QuizScreen({
         <View style={styles.center}>
           <ActivityIndicator
             size="large"
-            color="#089BA1"
+            color={COLORS.teal}
           />
 
           <Text style={styles.info}>
@@ -373,7 +499,7 @@ export default function QuizScreen({
         </View>
       )}
 
-      {/* ERROR */}
+      {/* ERROR SCREEN */}
       {phase === 'error' && (
         <View style={styles.center}>
           <Text style={styles.sectionHeading}>
@@ -394,22 +520,24 @@ export default function QuizScreen({
         </View>
       )}
 
-      {/* PLAYING QUIZ */}
+      {/* QUESTION SCREEN */}
       {phase === 'playing' && current && (
         <ScrollView
           style={styles.playScroll}
           contentContainerStyle={styles.playArea}
           showsVerticalScrollIndicator={false}>
 
+          {/* PROGRESS */}
           <View style={styles.progressTrack}>
             <View
               style={[
                 styles.progressFill,
                 {
                   width: `${
-                    (answers.length /
-                      QUESTIONS_PER_SESSION) *
-                    100
+                    (
+                      answers.length /
+                      QUESTIONS_PER_SESSION
+                    ) * 100
                   }%` as DimensionValue,
                 },
               ]}
@@ -425,19 +553,38 @@ export default function QuizScreen({
             Choose the Ojibwe word for:
           </Text>
 
-          {/* QUESTION WORD */}
+          {/* WORD AND SPEAKER */}
           <View style={styles.promptCard}>
             <Text style={styles.prompt}>
               {current.word_english}
             </Text>
 
-            <Text style={styles.audioNote}>
-              Text mode · Audio will be added when
-              recordings are approved
-            </Text>
+            <TouchableOpacity
+              style={[
+                styles.audioButton,
+                playingAudio &&
+                  styles.audioButtonActive,
+              ]}
+              onPress={() =>
+                void handleAudio()
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Play Ojibwe pronunciation">
+
+              <VolumeIcon
+                width={20}
+                height={18}
+              />
+
+              <Text style={styles.audioButtonText}>
+                {playingAudio
+                  ? 'Stop audio'
+                  : 'Listen'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          {/* ANSWERS */}
+          {/* ANSWER OPTIONS */}
           <View style={styles.answers}>
             {options.map((option, index) => {
               const showCorrect =
@@ -488,7 +635,7 @@ export default function QuizScreen({
             })}
           </View>
 
-          {/* FEEDBACK */}
+          {/* ANSWER FEEDBACK */}
           <View
             style={[
               styles.feedback,
@@ -524,7 +671,8 @@ export default function QuizScreen({
           <TouchableOpacity
             style={[
               styles.next,
-              !answered && styles.disabled,
+              !answered &&
+                styles.disabled,
             ]}
             disabled={!answered}
             onPress={nextQuestion}>
@@ -548,11 +696,12 @@ export default function QuizScreen({
           }
           showsVerticalScrollIndicator={false}>
 
-          {/* SCORE CARD */}
+          {/* SCORE */}
           <View style={styles.scoreCard}>
             <View>
               <Text style={styles.scoreBig}>
-                {score} / {QUESTIONS_PER_SESSION}
+                {score} /{' '}
+                {QUESTIONS_PER_SESSION}
               </Text>
 
               <Text style={styles.scoreLabel}>
@@ -601,7 +750,6 @@ export default function QuizScreen({
             </View>
           </View>
 
-          {/* WORDS PRACTICED */}
           <Text style={styles.sectionHeading}>
             Words practiced
           </Text>
@@ -610,12 +758,14 @@ export default function QuizScreen({
           <View style={styles.wordGrid}>
             {wordResults.map(word => {
               const before: MasteryTier =
-                startingProgress.words[word.id]
-                  ?.tier ?? 'new';
+                startingProgress.words[
+                  word.id
+                ]?.tier ?? 'new';
 
               const after: MasteryTier =
-                draftProgress.words[word.id]
-                  ?.tier ?? 'new';
+                draftProgress.words[
+                  word.id
+                ]?.tier ?? 'new';
 
               return (
                 <View
@@ -624,11 +774,12 @@ export default function QuizScreen({
 
                   <Text style={styles.wordTitle}>
                     {word.word_ojibwe}
-                    {' = '}
+                  </Text>
+
+                  <Text style={styles.wordEnglish}>
                     {word.word_english}
                   </Text>
 
-                  {/* MASTERY PROGRESS */}
                   <View style={styles.masteryRow}>
                     <View
                       style={[
@@ -685,7 +836,7 @@ export default function QuizScreen({
             })}
           </View>
 
-          {/* SAVE STATUS */}
+          {/* SAVE PROGRESS */}
           <View style={styles.saveArea}>
             {saveState === 'saving' && (
               <Text style={styles.info}>
@@ -713,6 +864,7 @@ export default function QuizScreen({
                       draftProgress,
                     )
                   }>
+
                   <Text style={styles.buttonText}>
                     Retry Save
                   </Text>
@@ -721,7 +873,7 @@ export default function QuizScreen({
             )}
           </View>
 
-          {/* RESULT BUTTONS */}
+          {/* RESULT ACTIONS */}
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[
@@ -762,19 +914,16 @@ export default function QuizScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#FFFBEF',
+    backgroundColor: COLORS.cream,
   },
 
   // HEADER
   header: {
     height: 52,
-    backgroundColor: '#035643',
+    backgroundColor: COLORS.green,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-  },
-  headerInfo: {
-    flex: 1,
   },
   back: {
     width: 34,
@@ -784,10 +933,13 @@ const styles = StyleSheet.create({
     fontSize: 29,
     color: '#FFFFFF',
   },
+  headerInfo: {
+    flex: 1,
+  },
   headerTitle: {
     fontSize: 19,
-    color: '#FFFFFF',
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   headerSub: {
     fontSize: 11,
@@ -799,29 +951,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // COMMON STYLES
+  // LOADING
   center: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
     gap: 12,
   },
   info: {
     fontSize: 13,
-    color: '#554E43',
+    color: COLORS.brown,
     textAlign: 'center',
   },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  disabled: {
-    opacity: 0.45,
-  },
 
-  // QUIZ PLAYING SCREEN
+  // QUESTION SCREEN
   playScroll: {
     flex: 1,
   },
@@ -840,7 +984,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#EC6E00',
+    backgroundColor: COLORS.orange,
   },
   eyebrow: {
     fontSize: 12,
@@ -852,37 +996,49 @@ const styles = StyleSheet.create({
   questionTitle: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#035643',
+    color: COLORS.green,
     marginBottom: 9,
   },
 
-  // QUESTION CARD
+  // QUESTION WORD AND SPEAKER
   promptCard: {
-    minHeight: 76,
-    backgroundColor: '#FFFBF0',
+    minHeight: 100,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: '#E3DACB',
+    borderColor: COLORS.border,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    padding: 10,
   },
   prompt: {
     fontSize: 25,
     fontWeight: 'bold',
-    color: '#035643',
+    color: COLORS.green,
     textAlign: 'center',
   },
-  audioNote: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#554E43',
-    textAlign: 'center',
-    marginTop: 5,
+  audioButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DFEFE7',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 7,
+    marginTop: 9,
+    gap: 7,
+    minHeight: 36,
+  },
+  audioButtonActive: {
+    backgroundColor: '#A5DDD4',
+  },
+  audioButtonText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: COLORS.green,
   },
 
-  // ANSWERS
+  // ANSWER BUTTONS
   answers: {
     gap: 10,
     marginTop: 13,
@@ -891,7 +1047,7 @@ const styles = StyleSheet.create({
   answer: {
     minHeight: 47,
     borderRadius: 9,
-    backgroundColor: '#089BA1',
+    backgroundColor: COLORS.teal,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -924,7 +1080,7 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
 
-  // ANSWER FEEDBACK
+  // FEEDBACK
   feedback: {
     minHeight: 49,
     borderRadius: 9,
@@ -953,19 +1109,28 @@ const styles = StyleSheet.create({
   },
   feedbackHint: {
     fontSize: 13,
-    color: '#554E43',
+    color: COLORS.brown,
     textAlign: 'center',
   },
   next: {
     height: 44,
-    backgroundColor: '#EC6E00',
+    backgroundColor: COLORS.orange,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 9,
   },
+  buttonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  disabled: {
+    opacity: 0.45,
+  },
 
-  // RESULTS SCROLL AREA
+  // RESULTS SCREEN
   resultsScroll: {
     flex: 1,
   },
@@ -975,11 +1140,9 @@ const styles = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 11,
   },
-
-  // BIGGER SCORE CARD
   scoreCard: {
     minHeight: 68,
-    backgroundColor: '#035643',
+    backgroundColor: COLORS.green,
     borderRadius: 10,
     paddingHorizontal: 13,
     paddingVertical: 10,
@@ -994,7 +1157,7 @@ const styles = StyleSheet.create({
   },
   scoreLabel: {
     fontSize: 12,
-    color: '#FFFBEF',
+    color: COLORS.cream,
     marginTop: 2,
   },
   scoreRight: {
@@ -1011,12 +1174,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: '#FFFFFF',
-    fontWeight: '500',
     textAlign: 'right',
     marginTop: 3,
   },
 
-  // REWARD CARDS
+  // REWARDS
   rewardRow: {
     flexDirection: 'row',
     gap: 7,
@@ -1026,9 +1188,9 @@ const styles = StyleSheet.create({
   rewardCard: {
     flex: 1,
     minHeight: 57,
-    backgroundColor: '#FFFBF0',
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: '#E3DACB',
+    borderColor: COLORS.border,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1037,23 +1199,21 @@ const styles = StyleSheet.create({
   rewardBig: {
     fontSize: 19,
     fontWeight: 'bold',
-    color: '#035643',
+    color: COLORS.green,
   },
   rewardLabel: {
     fontSize: 12,
-    color: '#554E43',
+    color: COLORS.brown,
     marginTop: 3,
   },
-
-  // SECTION HEADING
   sectionHeading: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#035643',
+    color: COLORS.green,
     marginBottom: 9,
   },
 
-  // WORD GRID FILLS AVAILABLE SCREEN SPACE
+  // WORDS PRACTICED
   wordGrid: {
     flexGrow: 1,
     flexDirection: 'row',
@@ -1063,36 +1223,34 @@ const styles = StyleSheet.create({
     columnGap: 7,
     rowGap: 8,
   },
-
-  // LARGER WORD CARDS
   wordCard: {
-    width: '48.7%',
-    minHeight: 74,
+    width: '48.5%',
+    minHeight: 84,
     paddingHorizontal: 9,
     paddingVertical: 9,
     borderWidth: 1,
-    borderColor: '#E3DACB',
+    borderColor: COLORS.border,
     borderRadius: 9,
-    backgroundColor: '#FFFBF0',
+    backgroundColor: COLORS.card,
     justifyContent: 'center',
   },
-
-  // CLEARER WORD TEXT
   wordTitle: {
     fontSize: 14,
     lineHeight: 19,
-    fontWeight: '700',
+    fontWeight: 'bold',
     color: '#292521',
-    flexShrink: 1,
   },
-
-  // MASTERY BADGES
+  wordEnglish: {
+    fontSize: 13,
+    color: COLORS.brown,
+    marginTop: 3,
+  },
   masteryRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 4,
-    marginTop: 7,
+    marginTop: 8,
   },
   tierBadge: {
     borderRadius: 5,
@@ -1106,31 +1264,29 @@ const styles = StyleSheet.create({
   tierArrow: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#554E43',
+    color: COLORS.brown,
   },
 
-  // SAVE STATUS
+  // FIREBASE SAVE STATUS
   saveArea: {
     minHeight: 29,
     justifyContent: 'center',
     marginTop: 8,
     marginBottom: 4,
   },
-
   savedText: {
     fontSize: 13,
     fontWeight: 'bold',
     color: '#168600',
     textAlign: 'center',
   },
-  
   errorText: {
     fontSize: 13,
     color: '#B23F38',
     textAlign: 'center',
   },
 
-  // BOTTOM ACTION BUTTONS
+  // RESULT BUTTONS
   actionRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1139,33 +1295,30 @@ const styles = StyleSheet.create({
   actionHalf: {
     flex: 1,
   },
-
   primary: {
     minHeight: 44,
-    backgroundColor: '#089BA1',
+    backgroundColor: COLORS.teal,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 7,
     paddingVertical: 8,
   },
-
   outlineButton: {
     minHeight: 44,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: '#089BA1',
-    backgroundColor: '#FFFBF0',
+    borderColor: COLORS.teal,
+    backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 7,
     paddingVertical: 8,
   },
-
   outlineText: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#035643',
+    color: COLORS.green,
     textAlign: 'center',
   },
 });

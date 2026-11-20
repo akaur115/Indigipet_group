@@ -27,7 +27,6 @@ import type {
   User,
 } from '@react-native-firebase/auth';
 
-// AUTHENTICATION SCREENS
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -35,15 +34,11 @@ import VerifyEmailScreen from './src/screens/VerifyEmailScreen';
 import MFASetupScreen from './src/screens/MFASetupScreen';
 import MFAVerifyScreen from './src/screens/MFAVerifyScreen';
 
-// MAIN APP SCREENS
 import HomeScreen from './src/screens/HomeScreen';
 import LearningScreen from './src/screens/LearningScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-
-// TERMS OF SERVICE
 import TermsAcceptanceScreen from './src/screens/TermsAcceptanceScreen';
 
-// FIREBASE AUTHENTICATION
 import {
   getCurrentUser,
   listenToAuthState,
@@ -51,7 +46,11 @@ import {
   userHasMFA,
 } from './src/services/authService';
 
-// SCREEN TYPES
+// NEW SVG ICONS
+import PawIcon from './assets/icons/paw-icon.svg';
+import BookIcon from './assets/icons/book-icon.svg';
+import CogIcon from './assets/icons/cog-icon.svg';
+
 type Screen =
   | 'welcome'
   | 'login'
@@ -63,39 +62,15 @@ type Screen =
   | 'learning'
   | 'settings';
 
-type MainTab =
-  | 'home'
-  | 'learning'
-  | 'settings';
-
-// BOTTOM NAVIGATION BUTTONS
-const TABS: {
-  id: MainTab;
-  icon: string;
-  label: string;
-}[] = [
-  {
-    id: 'home',
-    icon: '🐾',
-    label: 'Home',
-  },
-  {
-    id: 'learning',
-    icon: '📖',
-    label: 'Learning',
-  },
-  {
-    id: 'settings',
-    icon: '⚙️',
-    label: 'Settings',
-  },
-];
+const TABS = [
+  {id: 'home', label: 'Home', Icon: PawIcon},
+  {id: 'learning', label: 'Learning', Icon: BookIcon},
+  {id: 'settings', label: 'Settings', Icon: CogIcon},
+] as const;
 
 function AppContent() {
-  // REAL ANDROID SCREEN INSETS
   const insets = useSafeAreaInsets();
 
-  // KEEP CONTENT BELOW ANDROID CLOCK
   const topInset = Math.max(
     insets.top,
     Platform.OS === 'android'
@@ -103,42 +78,25 @@ function AppContent() {
       : 0,
   );
 
-  // KEEP NAVIGATION ABOVE ANDROID BUTTONS
   const bottomInset = Math.max(
     insets.bottom,
     Platform.OS === 'android' ? 24 : 0,
   );
 
-  // CURRENT SCREEN
-  const [
-    currentScreen,
-    setCurrentScreen,
-  ] = useState<Screen>('welcome');
+  const [currentScreen, setCurrentScreen] =
+    useState<Screen>('welcome');
 
-  // LOGIN CHECK
-  const [
-    checkingLogin,
-    setCheckingLogin,
-  ] = useState(true);
+  const [checkingLogin, setCheckingLogin] =
+    useState(true);
 
-  // MFA RESOLVER
-  const [
-    mfaResolver,
-    setMFAResolver,
-  ] = useState<MultiFactorResolver | null>(
-    null,
-  );
+  const [mfaResolver, setMFAResolver] =
+    useState<MultiFactorResolver | null>(null);
 
-  // TERMS ACCEPTANCE
-  const [
-    termsAcceptedUid,
-    setTermsAcceptedUid,
-  ] = useState<string | null>(null);
+  const [termsAcceptedUid, setTermsAcceptedUid] =
+    useState<string | null>(null);
 
-  const goToLoginAfterSignOut =
-    useRef(false);
+  const goToLoginAfterSignOut = useRef(false);
 
-  // CALLED AFTER USER ACCEPTS TERMS
   const handleTermsAccepted = useCallback(
     (uid: string) => {
       setTermsAcceptedUid(uid);
@@ -146,45 +104,30 @@ function AppContent() {
     [],
   );
 
-  // LISTEN FOR FIREBASE AUTHENTICATION
+  // FIREBASE LOGIN CHECK
   useEffect(() => {
-    const unsubscribe =
-      listenToAuthState(
-        (user: User | null) => {
-          // NOT LOGGED IN
-          if (!user) {
-            setTermsAcceptedUid(null);
+    const unsubscribe = listenToAuthState(
+      (user: User | null) => {
+        if (!user) {
+          setTermsAcceptedUid(null);
 
-            if (
-              goToLoginAfterSignOut.current
-            ) {
-              goToLoginAfterSignOut.current =
-                false;
-
-              setCurrentScreen('login');
-            } else {
-              setCurrentScreen('welcome');
-            }
+          if (goToLoginAfterSignOut.current) {
+            goToLoginAfterSignOut.current = false;
+            setCurrentScreen('login');
+          } else {
+            setCurrentScreen('welcome');
           }
+        } else if (!user.emailVerified) {
+          setCurrentScreen('verifyEmail');
+        } else if (!userHasMFA(user)) {
+          setCurrentScreen('mfaSetup');
+        } else {
+          setCurrentScreen('home');
+        }
 
-          // EMAIL NOT VERIFIED
-          else if (!user.emailVerified) {
-            setCurrentScreen('verifyEmail');
-          }
-
-          // MFA NOT SET UP
-          else if (!userHasMFA(user)) {
-            setCurrentScreen('mfaSetup');
-          }
-
-          // READY TO ENTER MAIN APP
-          else {
-            setCurrentScreen('home');
-          }
-
-          setCheckingLogin(false);
-        },
-      );
+        setCheckingLogin(false);
+      },
+    );
 
     return unsubscribe;
   }, []);
@@ -192,113 +135,74 @@ function AppContent() {
   // SIGN OUT
   const handleLogout = async () => {
     try {
-      goToLoginAfterSignOut.current =
-        false;
-
+      goToLoginAfterSignOut.current = false;
       setTermsAcceptedUid(null);
 
       await logoutUser();
 
       setMFAResolver(null);
-
       setCurrentScreen('welcome');
     } catch (error) {
-      console.log(
-        'LOGOUT ERROR:',
-        error,
-      );
-
+      console.log('LOGOUT ERROR:', error);
       throw error;
     }
   };
 
-  // RENDER CURRENT SCREEN
+  // SCREEN NAVIGATION
   const renderScreen = () => {
     switch (currentScreen) {
-
-      // WELCOME SCREEN
       case 'welcome':
         return (
           <WelcomeScreen
-            onLogin={() =>
-              setCurrentScreen('login')
-            }
-            onRegister={() =>
-              setCurrentScreen('register')
-            }
+            onLogin={() => setCurrentScreen('login')}
+            onRegister={() => setCurrentScreen('register')}
           />
         );
 
-      // LOGIN SCREEN
       case 'login':
         return (
           <LoginScreen
-            onRegister={() =>
-              setCurrentScreen('register')
-            }
-            onBack={() =>
-              setCurrentScreen('welcome')
-            }
+            onRegister={() => setCurrentScreen('register')}
+            onBack={() => setCurrentScreen('welcome')}
             onMFARequired={resolver => {
               setMFAResolver(resolver);
-
-              setCurrentScreen(
-                'mfaVerify',
-              );
+              setCurrentScreen('mfaVerify');
             }}
           />
         );
 
-      // REGISTRATION SCREEN
       case 'register':
         return (
           <RegisterScreen
-            onLogin={() =>
-              setCurrentScreen('login')
-            }
-            onBack={() =>
-              setCurrentScreen('welcome')
-            }
+            onLogin={() => setCurrentScreen('login')}
+            onBack={() => setCurrentScreen('welcome')}
           />
         );
 
-      // VERIFY EMAIL
       case 'verifyEmail':
         return (
           <VerifyEmailScreen
-            onVerified={() =>
-              setCurrentScreen('mfaSetup')
-            }
-            onBack={() =>
-              setCurrentScreen('login')
-            }
+            onVerified={() => setCurrentScreen('mfaSetup')}
+            onBack={() => setCurrentScreen('login')}
           />
         );
 
-      // MFA SETUP SCREEN
       case 'mfaSetup':
         return (
           <MFASetupScreen
             onComplete={async () => {
               try {
-                goToLoginAfterSignOut.current =
-                  true;
+                goToLoginAfterSignOut.current = true;
 
                 await logoutUser();
 
                 setMFAResolver(null);
-
                 setTermsAcceptedUid(null);
-
                 setCurrentScreen('login');
               } catch (error) {
-                goToLoginAfterSignOut.current =
-                  false;
+                goToLoginAfterSignOut.current = false;
 
-                console.log(
-                  'AUTO LOGOUT ERROR:',
-                  error,
-                );
+                console.log('AUTO LOGOUT ERROR:', error);
 
                 Alert.alert(
                   'Setup Complete',
@@ -311,23 +215,15 @@ function AppContent() {
           />
         );
 
-      // MFA VERIFICATION SCREEN
       case 'mfaVerify':
         if (!mfaResolver) {
           return (
             <LoginScreen
-              onRegister={() =>
-                setCurrentScreen('register')
-              }
-              onBack={() =>
-                setCurrentScreen('welcome')
-              }
+              onRegister={() => setCurrentScreen('register')}
+              onBack={() => setCurrentScreen('welcome')}
               onMFARequired={resolver => {
                 setMFAResolver(resolver);
-
-                setCurrentScreen(
-                  'mfaVerify',
-                );
+                setCurrentScreen('mfaVerify');
               }}
             />
           );
@@ -338,29 +234,23 @@ function AppContent() {
             resolver={mfaResolver}
             onComplete={() => {
               setMFAResolver(null);
-
               setCurrentScreen('home');
             }}
             onCancel={() => {
               setMFAResolver(null);
-
               setCurrentScreen('login');
             }}
           />
         );
 
-      // MAIN APP SCREENS
       case 'home':
       case 'learning':
       case 'settings': {
         const user = getCurrentUser();
 
-        // USER MUST BE LOGGED IN
         if (!user) {
           return (
-            <View
-              style={styles.loadingContainer}>
-
+            <View style={styles.loadingContainer}>
               <ActivityIndicator
                 size="large"
                 color="#035643"
@@ -369,33 +259,24 @@ function AppContent() {
           );
         }
 
-        // TERMS ACCEPTANCE REQUIRED
-        if (
-          termsAcceptedUid !== user.uid
-        ) {
+        // TERMS ACCEPTANCE
+        if (termsAcceptedUid !== user.uid) {
           return (
             <TermsAcceptanceScreen
               uid={user.uid}
-              onAccepted={
-                handleTermsAccepted
-              }
+              onAccepted={handleTermsAccepted}
               onDecline={handleLogout}
             />
           );
         }
 
-        // MAIN APP LAYOUT
         return (
           <View style={styles.mainLayout}>
-
-            {/* CURRENT MAIN SCREEN */}
+            {/* ACTIVE SCREEN */}
             <View style={styles.mainContent}>
               {currentScreen === 'home' ? (
-                <HomeScreen
-                  uid={user.uid}
-                />
-              ) : currentScreen ===
-                'learning' ? (
+                <HomeScreen uid={user.uid} />
+              ) : currentScreen === 'learning' ? (
                 <LearningScreen
                   uid={user.uid}
                   onReturnHome={() =>
@@ -404,12 +285,8 @@ function AppContent() {
                 />
               ) : (
                 <SettingsScreen
-                  email={
-                    user.email ?? ''
-                  }
-                  onLogout={
-                    handleLogout
-                  }
+                  email={user.email ?? ''}
+                  onLogout={handleLogout}
                   onReturnHome={() =>
                     setCurrentScreen('home')
                   }
@@ -417,35 +294,30 @@ function AppContent() {
               )}
             </View>
 
-            {/* BOTTOM NAVIGATION */}
+            {/* SVG BOTTOM NAVIGATION */}
             <View style={styles.bottomBar}>
               {TABS.map(tab => {
                 const selected =
                   currentScreen === tab.id;
+
+                const TabIcon = tab.Icon;
 
                 return (
                   <TouchableOpacity
                     key={tab.id}
                     style={[
                       styles.bottomItem,
-                      selected &&
-                        styles.bottomItemSelected,
+                      selected && styles.bottomItemSelected,
                     ]}
                     onPress={() =>
                       setCurrentScreen(tab.id)
                     }
                     accessibilityRole="tab"
-                    accessibilityState={{
-                      selected,
-                    }}>
+                    accessibilityState={{selected}}
+                    accessibilityLabel={tab.label}>
 
-                    {/* SMALL ICON */}
-                    <Text
-                      style={styles.bottomIcon}>
-                      {tab.icon}
-                    </Text>
+                    <TabIcon width={23} height={23} />
 
-                    {/* VISIBLE LABEL */}
                     <Text
                       style={[
                         styles.bottomText,
@@ -462,53 +334,37 @@ function AppContent() {
         );
       }
 
-      // DEFAULT
       default:
         return (
           <WelcomeScreen
-            onLogin={() =>
-              setCurrentScreen('login')
-            }
-            onRegister={() =>
-              setCurrentScreen('register')
-            }
+            onLogin={() => setCurrentScreen('login')}
+            onRegister={() => setCurrentScreen('register')}
           />
         );
     }
   };
 
-  // APP ROOT
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
-      {/* ANDROID STATUS BAR */}
-      <StatusBar
-        barStyle="light-content"
-      />
-
-      {/* TOP SAFE AREA */}
+      {/* TOP ANDROID SAFE AREA */}
       <View
         style={[
           styles.topSafeArea,
-          {
-            height: topInset,
-          },
+          {height: topInset},
         ]}
       />
 
       {/* APP CONTENT */}
       <View style={styles.appContent}>
         {checkingLogin ? (
-          <View
-            style={styles.loadingContainer}>
-
+          <View style={styles.loadingContainer}>
             <ActivityIndicator
               size="large"
               color="#035643"
             />
-
-            <Text
-              style={styles.loadingText}>
+            <Text style={styles.loadingText}>
               Loading IndigiPet...
             </Text>
           </View>
@@ -517,67 +373,51 @@ function AppContent() {
         )}
       </View>
 
-      {/* BOTTOM SAFE AREA */}
+      {/* BOTTOM ANDROID SAFE AREA */}
       <View
         style={[
           styles.bottomSafeArea,
-          {
-            height: bottomInset,
-          },
+          {height: bottomInset},
         ]}
       />
     </View>
   );
 }
 
-// STYLES
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
     backgroundColor: '#035643',
   },
-
-  // AREA BEHIND ANDROID CLOCK
   topSafeArea: {
     backgroundColor: '#035643',
   },
-
-  // AREA BEHIND ANDROID SYSTEM BUTTONS
   bottomSafeArea: {
     backgroundColor: '#FFFBF0',
   },
-
-  // SCREEN CONTENT
   appContent: {
     flex: 1,
     backgroundColor: '#FFFBEF',
   },
-
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FFFBEF',
   },
-
   loadingText: {
     color: '#035643',
     marginTop: 12,
     fontSize: 15,
   },
-
   mainLayout: {
     flex: 1,
     backgroundColor: '#FFFBEF',
   },
-
   mainContent: {
     flex: 1,
     minHeight: 0,
   },
-
-  // SMALL BOTTOM NAVIGATION
   bottomBar: {
     height: 56,
     flexDirection: 'row',
@@ -588,7 +428,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-
   bottomItem: {
     flex: 1,
     height: 46,
@@ -597,33 +436,21 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     marginHorizontal: 3,
   },
-
-  // SELECTED TAB COLOUR
   bottomItemSelected: {
     backgroundColor: '#DFEFE7',
   },
-
-  // SMALLER ICONS
-  bottomIcon: {
-    fontSize: 18,
-    includeFontPadding: false,
-  },
-
-  // CLEAR TEXT
   bottomText: {
     fontSize: 11,
     color: '#484139',
     marginTop: 3,
     includeFontPadding: false,
   },
-
   bottomTextSelected: {
     color: '#035643',
     fontWeight: 'bold',
   },
 });
 
-// WRAP APP WITH SAFE AREA PROVIDER
 export default function App() {
   return (
     <SafeAreaProvider>

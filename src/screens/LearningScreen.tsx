@@ -1,5 +1,6 @@
 
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
+
 import {
   Alert,
   ScrollView,
@@ -20,6 +21,7 @@ import {getLevel} from '../services/gameService';
 import {
   QUIZ_WORDS,
   type QuizCategoryId,
+  type QuizWord,
 } from '../data/quizWords';
 
 import {
@@ -28,7 +30,17 @@ import {
   type MasteryTier,
 } from '../services/quizEngine';
 
+import {
+  playWordAudio,
+  stopWordAudio,
+} from '../services/audioService';
+
 import QuizScreen from './QuizScreen';
+
+// SVG ICONS
+import PlayIcon from '../../assets/icons/play-icon.svg';
+import ReadingIcon from '../../assets/icons/reading-icon.svg';
+import VolumeIcon from '../../assets/icons/volume-icon.svg';
 
 type Props = {
   uid: string;
@@ -108,9 +120,18 @@ export default function LearningScreen({
   const [mode, setMode] =
     useState<'view' | 'quiz' | null>(null);
 
-  // LOAD LEARNING PROGRESS
+  const [playingId, setPlayingId] =
+    useState<string | null>(null);
+
+  const audioRequest = useRef(0);
+
+  // LOAD FIREBASE LEARNING PROGRESS
   useEffect(() => {
-    const reference = doc(getFirestore(), 'users', uid);
+    const reference = doc(
+      getFirestore(),
+      'users',
+      uid,
+    );
 
     const unsubscribe = onSnapshot(
       reference,
@@ -123,7 +144,9 @@ export default function LearningScreen({
             : 0,
         );
 
-        setProgress(data?.quizProgress ?? {});
+        setProgress(
+          data?.quizProgress ?? {},
+        );
       },
       error => {
         console.log(
@@ -136,10 +159,26 @@ export default function LearningScreen({
     return unsubscribe;
   }, [uid]);
 
+  // STOP AUDIO WHEN SCREEN UNMOUNTS
+  useEffect(() => {
+    return () => {
+      audioRequest.current += 1;
+      stopWordAudio();
+    };
+  }, []);
+
   const currentLevel = getLevel(xp).level;
 
-  // RETURN TO PREVIOUS SCREEN
+  const stopAudio = () => {
+    audioRequest.current += 1;
+    stopWordAudio();
+    setPlayingId(null);
+  };
+
+  // BACK BUTTON
   const goBack = () => {
+    stopAudio();
+
     if (mode === 'quiz' || mode === 'view') {
       setCategory(null);
       setMode(null);
@@ -148,7 +187,7 @@ export default function LearningScreen({
     }
   };
 
-  // OPEN CATEGORY
+  // OPEN LEARNING CATEGORY
   const enter = (
     item: Category,
     nextMode: 'view' | 'quiz',
@@ -169,20 +208,62 @@ export default function LearningScreen({
       return;
     }
 
+    stopAudio();
     setCategory(item.id as QuizCategoryId);
     setMode(nextMode);
   };
 
+  // GET WORD MASTERY
   const getTier = (
     cat: QuizCategoryId,
     wordId: string,
   ): MasteryTier => {
     return (
-      progress[cat]?.words?.[wordId]?.tier ?? 'new'
+      progress[cat]?.words?.[wordId]?.tier ??
+      'new'
     );
   };
 
-  // OPEN THE QUIZ SCREEN
+  // PLAY WORD RECORDING
+  const handlePlayAudio = async (
+    word: QuizWord,
+  ) => {
+    if (playingId === word.id) {
+      stopAudio();
+      return;
+    }
+
+    stopAudio();
+
+    if (!word.audio_file_path) {
+      Alert.alert(
+        'Audio unavailable',
+        'There is no recording for this word yet.',
+      );
+      return;
+    }
+
+    const request = ++audioRequest.current;
+    setPlayingId(word.id);
+
+    try {
+      await playWordAudio(word);
+    } catch (error: any) {
+      if (request === audioRequest.current) {
+        Alert.alert(
+          'Audio Error',
+          error?.message ||
+            'Could not play the recording.',
+        );
+      }
+    } finally {
+      if (request === audioRequest.current) {
+        setPlayingId(null);
+      }
+    }
+  };
+
+  // OPEN QUIZ
   if (category && mode === 'quiz') {
     return (
       <QuizScreen
@@ -223,25 +304,58 @@ export default function LearningScreen({
           showsVerticalScrollIndicator={false}>
 
           <Text style={styles.intro}>
-            Learn and practise your Ojibwe words.
+            Learn Ojibwe words and listen to
+            their pronunciation.
           </Text>
 
           {QUIZ_WORDS[category].map(word => {
-            const tier = getTier(category, word.id);
+            const tier = getTier(
+              category,
+              word.id,
+            );
+
+            const isPlaying =
+              playingId === word.id;
 
             return (
               <View
                 key={word.id}
                 style={styles.wordCard}>
 
-                <Text style={styles.ojibwe}>
-                  {word.word_ojibwe}
-                </Text>
+                <View style={styles.wordRow}>
+                  <View style={styles.wordInfo}>
+                    <Text style={styles.ojibwe}>
+                      {word.word_ojibwe}
+                    </Text>
 
-                <Text style={styles.english}>
-                  {word.word_english}
-                </Text>
+                    <Text style={styles.english}>
+                      {word.word_english}
+                    </Text>
+                  </View>
 
+                  {/* VOLUME ICON */}
+                  <TouchableOpacity
+                    style={[
+                      styles.audioButton,
+                      isPlaying &&
+                        styles.audioButtonActive,
+                    ]}
+                    onPress={() =>
+                      void handlePlayAudio(word)
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      `Play pronunciation of ${word.word_ojibwe}`
+                    }>
+
+                    <VolumeIcon
+                      width={24}
+                      height={22}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* MASTERY BADGE */}
                 <View
                   style={[
                     styles.badge,
@@ -254,7 +368,10 @@ export default function LearningScreen({
                   <Text
                     style={[
                       styles.badgeText,
-                      {color: TIER_COLORS[tier].color},
+                      {
+                        color:
+                          TIER_COLORS[tier].color,
+                      },
                     ]}>
                     {tierLabel(tier)}
                   </Text>
@@ -285,10 +402,15 @@ export default function LearningScreen({
               item.id === 'food';
 
             const vocab = valid
-              ? QUIZ_WORDS[item.id as QuizCategoryId]
+              ? QUIZ_WORDS[
+                  item.id as QuizCategoryId
+                ]
               : [];
 
-            const counts: Record<MasteryTier, number> = {
+            const counts: Record<
+              MasteryTier,
+              number
+            > = {
               new: 0,
               learning: 0,
               known: 0,
@@ -324,20 +446,23 @@ export default function LearningScreen({
                     <Text style={styles.subtitle}>
                       {unlocked
                         ? `${vocab.length} Ojibwe words`
-                        : currentLevel < item.unlockLevel
-                        ? `Unlocks at level ${item.unlockLevel}`
-                        : 'Coming soon'}
+                        : currentLevel <
+                            item.unlockLevel
+                          ? `Unlocks at level ${item.unlockLevel}`
+                          : 'Coming soon'}
                     </Text>
                   </View>
 
                   <Text style={styles.categoryStatus}>
-                    {unlocked ? 'Available' : 'Locked'}
+                    {unlocked
+                      ? 'Available'
+                      : 'Locked'}
                   </Text>
                 </View>
 
                 {unlocked && (
                   <>
-                    {/* WORD MASTERY COUNTS */}
+                    {/* MASTERY COUNTS */}
                     <View style={styles.countRow}>
                       {(
                         [
@@ -364,7 +489,8 @@ export default function LearningScreen({
                                   TIER_COLORS[tier].color,
                               },
                             ]}>
-                            {tierLabel(tier)} {counts[tier]}
+                            {tierLabel(tier)}{' '}
+                            {counts[tier]}
                           </Text>
                         </View>
                       ))}
@@ -377,8 +503,16 @@ export default function LearningScreen({
                         onPress={() =>
                           enter(item, 'quiz')
                         }>
+
+                        <View style={styles.playIconHolder}>
+                          <PlayIcon
+                            width={13}
+                            height={16}
+                          />
+                        </View>
+
                         <Text style={styles.playText}>
-                          ▶ Play
+                          Play
                         </Text>
                       </TouchableOpacity>
 
@@ -387,8 +521,14 @@ export default function LearningScreen({
                         onPress={() =>
                           enter(item, 'view')
                         }>
+
+                        <ReadingIcon
+                          width={19}
+                          height={19}
+                        />
+
                         <Text style={styles.viewText}>
-                          📖 View
+                          View
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -408,8 +548,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFBEF',
   },
-
-  // HEADER
   header: {
     height: 52,
     backgroundColor: '#035643',
@@ -430,8 +568,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-
-  // MAIN SCROLL AREA
   scroll: {
     flex: 1,
   },
@@ -447,7 +583,7 @@ const styles = StyleSheet.create({
     marginBottom: 11,
   },
 
-  // LEARNING CATEGORY CARDS
+  // CATEGORY CARDS
   categoryCard: {
     backgroundColor: '#FFFBF0',
     borderWidth: 1,
@@ -483,7 +619,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // LEARNING PROGRESS CHIPS
+  // MASTERY CHIPS
   countRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -500,7 +636,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // CATEGORY ACTION BUTTONS
+  // PLAY AND VIEW
   actions: {
     flexDirection: 'row',
     gap: 9,
@@ -511,6 +647,16 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 8,
     backgroundColor: '#089BA1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  playIconHolder: {
+    width: 23,
+    height: 23,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -526,8 +672,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#089BA1',
     backgroundColor: '#FFFBEF',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
   },
   viewText: {
     fontSize: 15,
@@ -535,7 +683,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // VOCABULARY CARDS
+  // VOCABULARY WORDS
   wordCard: {
     padding: 13,
     backgroundColor: '#FFFBF0',
@@ -543,6 +691,15 @@ const styles = StyleSheet.create({
     borderColor: '#E5DAC8',
     borderRadius: 10,
     marginBottom: 9,
+  },
+  wordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  wordInfo: {
+    flex: 1,
   },
   ojibwe: {
     fontSize: 18,
@@ -554,12 +711,26 @@ const styles = StyleSheet.create({
     color: '#484139',
     marginTop: 4,
   },
+  audioButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#DFEFE7',
+    borderWidth: 1,
+    borderColor: '#B9DAD0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioButtonActive: {
+    backgroundColor: '#A5DDD4',
+    borderColor: '#089BA1',
+  },
   badge: {
     alignSelf: 'flex-start',
     borderRadius: 5,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    marginTop: 7,
+    marginTop: 8,
   },
   badgeText: {
     fontSize: 12,
