@@ -5,7 +5,6 @@ import {
   Alert,
   AppState,
   Image,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -40,8 +39,8 @@ type Food = (typeof FOODS)[number];
 const COLORS = {
   cream: '#FFFBEF',
   green: '#035643',
-  cream2: '#FFFBF0',
-  brown: '#6E6151',
+  card: '#FFFBF0',
+  brown: '#484139',
   orange: '#EC6E00',
   gold: '#FFAE33',
   track: '#F3E9CF',
@@ -60,23 +59,15 @@ const FOOD_SPEECH: Record<string, string> = {
   rice: "My tummy is full! You're the best!",
 };
 
-const QUIZ_SPEECH_MS = 45000;
-const FEED_SPEECH_MS = 12000;
-
-function Bar({value}: {value: number}) {
-  const safe = Math.max(
-    0,
-    Math.min(100, Number(value) || 0),
-  );
+function ProgressBar({value}: {value: number}) {
+  const safe = Math.max(0, Math.min(100, Number(value) || 0));
 
   return (
     <View style={styles.barTrack}>
       <View
         style={[
           styles.barFill,
-          {
-            width: `${safe}%` as DimensionValue,
-          },
+          {width: `${safe}%` as DimensionValue},
         ]}
       />
     </View>
@@ -92,20 +83,23 @@ export default function HomeScreen({uid}: Props) {
   const [feedSpeech, setFeedSpeech] = useState<string | null>(null);
   const [lastQuizAt, setLastQuizAt] = useState(0);
 
-  // LOAD FIREBASE DATA AND UPDATE PET CARE
+  // Load pet data from Firebase
   useEffect(() => {
     let active = true;
     let unsubscribe = () => {};
 
     ensureGameData(uid)
       .then(() => {
-        if (!active) return;
+        if (!active) {
+          return;
+        }
 
         unsubscribe = subscribeGameData(
           uid,
           saved => {
-            if (!active) return;
-
+            if (!active) {
+              return;
+            }
             setGame(saved);
             setErrorText('');
             setNow(Date.now());
@@ -125,11 +119,9 @@ export default function HomeScreen({uid}: Props) {
         }
       });
 
-    // DECAY UPDATES WHILE THE APP IS OPEN
-    const timer = setInterval(
-      () => setNow(Date.now()),
-      5000,
-    );
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 5000);
 
     const subscription = AppState.addEventListener(
       'change',
@@ -148,64 +140,52 @@ export default function HomeScreen({uid}: Props) {
     };
   }, [uid]);
 
-  // QUIZ COMPLETION MESSAGE
+  // Listen for the most recent quiz
   useEffect(() => {
-    const reference = doc(
-      getFirestore(),
-      'users',
-      uid,
-    );
+    const reference = doc(getFirestore(), 'users', uid);
 
     const unsubscribe = onSnapshot(
       reference,
       snapshot => {
         const event = snapshot.data()?.lastQuizEvent;
-
         setLastQuizAt(
-          typeof event?.at === 'number'
-            ? event.at
-            : 0,
+          typeof event?.at === 'number' ? event.at : 0,
         );
-
-        setNow(Date.now());
       },
       error => {
-        console.log(
-          'QUIZ SPEECH ERROR:',
-          error.message,
-        );
+        console.log('Quiz speech error:', error.message);
       },
     );
 
     return unsubscribe;
   }, [uid]);
 
-  // CLEAR FEEDING MESSAGE
   useEffect(() => {
-    if (!feedSpeech) return;
+    if (!feedSpeech) {
+      return;
+    }
 
-    const timer = setTimeout(
-      () => setFeedSpeech(null),
-      FEED_SPEECH_MS,
-    );
+    const timer = setTimeout(() => {
+      setFeedSpeech(null);
+    }, 12000);
 
     return () => clearTimeout(timer);
   }, [feedSpeech]);
 
-  // FEED ESIBAN
+  // Feed Esiban
   const handleFeed = async (item: Food) => {
-    if (!game || feeding) return;
+    if (!game || feeding) {
+      return;
+    }
 
     setFeeding(true);
 
     try {
       await feedPet(uid, item);
-
       setFeedSpeech(
         FOOD_SPEECH[item.id] ||
           'Thank you for feeding me!',
       );
-
       setNow(Date.now());
     } catch (error: any) {
       Alert.alert(
@@ -224,9 +204,6 @@ export default function HomeScreen({uid}: Props) {
           Unable to load pet data
         </Text>
         <Text style={styles.helper}>{errorText}</Text>
-        <Text style={styles.helper}>
-          Check your internet and Firestore connection.
-        </Text>
       </View>
     );
   }
@@ -247,39 +224,36 @@ export default function HomeScreen({uid}: Props) {
 
   const stats = getCurrentStats(game, now);
   const level = getLevel(game.xp);
-  const normalSpeech = getPetSpeech(stats, dialogueNumber);
 
   const recentQuiz =
     lastQuizAt > 0 &&
     now >= lastQuizAt &&
-    now - lastQuizAt < QUIZ_SPEECH_MS;
+    now - lastQuizAt < 45000;
 
   const speech =
     feedSpeech ||
     (recentQuiz
       ? "I loved learning with you! Let's play again soon!"
-      : normalSpeech);
+      : getPetSpeech(stats, dialogueNumber));
 
   const xpPercentage = Math.max(
     0,
     Math.min(
       100,
-      (level.xpIntoLevel /
-        Math.max(1, level.xpForNext)) * 100,
+      (level.xpIntoLevel / Math.max(1, level.xpForNext)) *
+        100,
     ),
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.page}>
 
-        {/* HEADER */}
+        {/* XP AND COINS */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <View>
-              <Text style={styles.brand}>
-                IndigiPet
-              </Text>
+              <Text style={styles.brand}>IndigiPet</Text>
               <Text style={styles.headerSmall}>
                 XP · Level {level.level}
               </Text>
@@ -307,23 +281,19 @@ export default function HomeScreen({uid}: Props) {
           </Text>
         </View>
 
-        {/* SPEECH */}
+        {/* PET MESSAGE */}
         <TouchableOpacity
           style={styles.speechBubble}
           onPress={() =>
-            setDialogueNumber(number => number + 1)
-          }
-          accessibilityRole="button"
-          accessibilityLabel="Next Esiban message">
-
+            setDialogueNumber(value => value + 1)
+          }>
           <Text style={styles.speechText}>
             {speech}
           </Text>
-
           <View style={styles.speechPointer} />
         </TouchableOpacity>
 
-        {/* RACCOON SCENE */}
+        {/* ORIGINAL RACCOON IMAGE */}
         <View style={styles.scene}>
           <View style={styles.ground} />
 
@@ -331,15 +301,13 @@ export default function HomeScreen({uid}: Props) {
             source={require('../../assets/images/esiban.png')}
             style={styles.petImage}
             resizeMode="contain"
-            accessibilityLabel="Esiban raccoon"
           />
         </View>
 
-        {/* FOOD BUTTONS */}
+        {/* FOOD CARDS */}
         <View style={styles.foodRow}>
           {FOODS.map(item => {
-            const cannotAfford =
-              game.coins < item.cost;
+            const cannotAfford = game.coins < item.cost;
 
             return (
               <TouchableOpacity
@@ -348,12 +316,8 @@ export default function HomeScreen({uid}: Props) {
                   styles.foodCard,
                   cannotAfford && styles.disabled,
                 ]}
-                onPress={() => void handleFeed(item)}
                 disabled={feeding || cannotAfford}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  `Feed ${item.name} for ${item.cost} coins`
-                }>
+                onPress={() => void handleFeed(item)}>
 
                 <Image
                   source={FOOD_IMAGES[item.id]}
@@ -379,13 +343,12 @@ export default function HomeScreen({uid}: Props) {
             <Text style={styles.statName}>
               Hunger
             </Text>
-
             <Text style={styles.statValue}>
               {Math.round(stats.hunger)}%
             </Text>
           </View>
 
-          <Bar value={stats.hunger} />
+          <ProgressBar value={stats.hunger} />
 
           <View
             style={[
@@ -395,16 +358,15 @@ export default function HomeScreen({uid}: Props) {
             <Text style={styles.statName}>
               Friendship
             </Text>
-
             <Text style={styles.statValue}>
               {Math.round(stats.friendship)}%
             </Text>
           </View>
 
-          <Bar value={stats.friendship} />
+          <ProgressBar value={stats.friendship} />
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -413,129 +375,117 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.cream,
   },
-
   page: {
     flex: 1,
     paddingHorizontal: 10,
     paddingTop: 6,
-    paddingBottom: 5,
-    gap: 7,
+    paddingBottom: 8,
+    gap: 8,
   },
-
   center: {
     flex: 1,
     backgroundColor: COLORS.cream,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 22,
+    padding: 20,
   },
-
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.green,
   },
-
   helper: {
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.brown,
     textAlign: 'center',
     marginTop: 10,
   },
 
+  // XP HEADER
   header: {
     backgroundColor: COLORS.green,
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 10,
   },
-
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-
   brand: {
-    color: COLORS.cream,
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
-
   headerSmall: {
-    color: COLORS.cream,
     fontSize: 12,
+    color: '#FFFFFF',
     marginTop: 2,
   },
-
   coins: {
-    color: COLORS.gold,
     fontSize: 16,
+    color: COLORS.gold,
     fontWeight: 'bold',
   },
-
   xpTrack: {
     height: 8,
     backgroundColor: '#064738',
     borderRadius: 8,
-    marginTop: 7,
     overflow: 'hidden',
+    marginTop: 7,
   },
-
   xpFill: {
     height: '100%',
     backgroundColor: COLORS.gold,
+    borderRadius: 8,
   },
-
   xpLabel: {
     fontSize: 11,
-    color: COLORS.cream,
+    color: '#FFFFFF',
     marginTop: 5,
   },
 
+  // SPEECH BUBBLE
   speechBubble: {
-    position: 'relative',
-    backgroundColor: COLORS.cream2,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    borderRadius: 10,
-    minHeight: 44,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    minHeight: 45,
     justifyContent: 'center',
   },
-
   speechText: {
-    fontSize: 13,
-    color: '#292521',
+    fontSize: 14,
+    lineHeight: 19,
+    color: COLORS.brown,
     textAlign: 'center',
-    lineHeight: 18,
   },
-
   speechPointer: {
     position: 'absolute',
-    bottom: -8,
+    bottom: -7,
     left: '15%',
-    width: 15,
-    height: 15,
-    transform: [{rotate: '45deg'}],
-    backgroundColor: COLORS.cream2,
-    borderBottomWidth: 1,
+    width: 13,
+    height: 13,
+    backgroundColor: COLORS.card,
     borderRightWidth: 1,
+    borderBottomWidth: 1,
     borderColor: COLORS.border,
+    transform: [{rotate: '45deg'}],
   },
 
-  // FLEXIBLE SCENE WITH SMALLER RACCOON
+  // RACCOON SCENE FILLS AVAILABLE SPACE
   scene: {
     flex: 1,
-    minHeight: 115,
+    minHeight: 135,
     backgroundColor: '#8CCEE0',
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
-
   ground: {
     position: 'absolute',
     bottom: 0,
@@ -544,95 +494,88 @@ const styles = StyleSheet.create({
     height: '25%',
     backgroundColor: '#4B820D',
   },
-
   petImage: {
-    width: '70%',
+    width: '76%',
     height: '88%',
-    maxHeight: 195,
-    marginBottom: 2,
+    marginBottom: 3,
   },
 
+  // FOOD CARDS
   foodRow: {
     flexDirection: 'row',
     gap: 7,
   },
-
   foodCard: {
     flex: 1,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderBottomWidth: 2,
+    borderColor: COLORS.border,
+    borderRadius: 9,
+    minHeight: 76,
+    paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.cream2,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderBottomWidth: 2,
-    borderRadius: 9,
-    paddingVertical: 5,
-    minHeight: 68,
   },
-
   disabled: {
-    opacity: 0.55,
+    opacity: 0.5,
   },
-
   foodImage: {
-    width: 43,
-    height: 32,
+    width: 45,
+    height: 35,
   },
-
   foodName: {
-    fontSize: 12,
+    fontSize: 14,
+    color: COLORS.brown,
     fontWeight: '600',
-    color: '#484139',
     marginTop: 2,
   },
-
   foodCost: {
     fontSize: 13,
     color: COLORS.orange,
     fontWeight: 'bold',
-    marginTop: 3,
+    marginTop: 2,
   },
 
+  // PET STATS
   statsCard: {
-    backgroundColor: COLORS.cream2,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 105,
+    justifyContent: 'center',
   },
-
   statHeading: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-
   friendshipHeading: {
-    marginTop: 8,
+    marginTop: 12,
   },
-
   statName: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: 'bold',
     color: COLORS.brown,
   },
-
   statValue: {
-    fontSize: 13,
+    fontSize: 15,
+    fontWeight: '600',
     color: COLORS.brown,
   },
-
   barTrack: {
-    height: 7,
-    borderRadius: 8,
-    overflow: 'hidden',
+    height: 10,
     backgroundColor: COLORS.track,
-    marginTop: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginTop: 6,
   },
-
   barFill: {
     height: '100%',
     backgroundColor: COLORS.orange,
-    borderRadius: 8,
+    borderRadius: 10,
   },
 });
