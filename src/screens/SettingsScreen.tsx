@@ -1,5 +1,8 @@
 
-import React, {useEffect, useState} from 'react';
+import React, {
+  useEffect,
+  useState,
+} from 'react';
 
 import {
   ActivityIndicator,
@@ -69,6 +72,8 @@ export default function SettingsScreen({
   onLogout,
   onReturnHome,
 }: Props) {
+
+  // SETTINGS SECTIONS
   const [sections, setSections] =
     useState<SectionsState>({
       account: false,
@@ -97,7 +102,7 @@ export default function SettingsScreen({
   const [savingLogout, setSavingLogout] =
     useState(false);
 
-  // LOAD ACCOUNT DETAILS FROM FIREBASE
+  // LOAD ACCOUNT INFORMATION FROM FIREBASE
   useEffect(() => {
     const user = getCurrentUser();
 
@@ -139,8 +144,10 @@ export default function SettingsScreen({
     return unsubscribe;
   }, []);
 
-  // EXPAND OR COLLAPSE SETTINGS
-  const toggleSection = (id: SectionId) => {
+  // OPEN OR CLOSE SETTINGS SECTIONS
+  const toggleSection = (
+    id: SectionId,
+  ) => {
     setSections(previous => ({
       ...previous,
       [id]: !previous[id],
@@ -183,13 +190,12 @@ export default function SettingsScreen({
     );
   };
 
-  // REQUEST ACCOUNT DELETION BY EMAIL
-  // WORKS WITHOUT CLOUD FUNCTIONS.
-  // DOES NOT AUTOMATICALLY DELETE ACCOUNT.
+  // EMAIL ACCOUNT DELETION REQUEST
+  // COMPATIBLE WITH FIREBASE SPARK FREE PLAN
   const handleDeleteAccount = () => {
     Alert.alert(
       'Request Account Deletion',
-      'You can request permanent deletion of your IndigiPet account and personal information. Your pet, coins, XP, and learning progress will also be deleted. Requests must be processed within 30 days. Please send the email from your registered account address.',
+      'You can request permanent deletion of your IndigiPet account and personal information. Your pet, coins, XP, and learning progress will also be deleted. Requests must be processed within 30 days. Please use your registered email address.',
       [
         {
           text: 'Keep Account',
@@ -198,15 +204,18 @@ export default function SettingsScreen({
         {
           text: 'Email Support',
           onPress: async () => {
+
+            // EMAIL SUBJECT
             const subject =
               encodeURIComponent(
                 'IndigiPet Account Deletion Request',
               );
 
+            // EMAIL BODY
             const body =
               encodeURIComponent(
                 'Hello IndigiPet Support,\n\n' +
-                'I would like to request permanent deletion of my IndigiPet account and all associated personal data.\n\n' +
+                'I would like to request permanent deletion of my IndigiPet account and all associated personal information.\n\n' +
                 'Registered account email: ' +
                 (email ||
                   '[Enter registered email]') +
@@ -216,6 +225,7 @@ export default function SettingsScreen({
                 'Thank you.',
               );
 
+            // PREPARED EMAIL LINK
             const mailto =
               'mailto:' +
               SUPPORT_EMAIL +
@@ -224,31 +234,29 @@ export default function SettingsScreen({
               '&body=' +
               body;
 
+            // DIRECTLY OPEN EMAIL APP
             try {
-              const supported =
-                await Linking.canOpenURL(
-                  mailto,
-                );
-
-              if (!supported) {
-                Alert.alert(
-                  'Email App Not Available',
-                  'Please send your account deletion request from your registered email address to ' +
-                    SUPPORT_EMAIL +
-                    '.',
-                );
-                return;
-              }
-
               await Linking.openURL(
                 mailto,
               );
+
             } catch (error) {
+              console.log(
+                'EMAIL OPEN ERROR:',
+                error,
+              );
+
               Alert.alert(
-                'Unable to Open Email',
-                'Please email ' +
+                'Email App Not Available',
+                'No compatible email app could be opened. Please install or configure Gmail, or send the request manually from your registered email address to ' +
                   SUPPORT_EMAIL +
-                  ' from your registered account email address.',
+                  '.',
+                [
+                  {
+                    text: 'OK',
+                    style: 'cancel',
+                  },
+                ],
               );
             }
           },
@@ -257,7 +265,7 @@ export default function SettingsScreen({
     );
   };
 
-  // SECTION DROPDOWN
+  // SETTINGS SECTION HEADER
   const renderHeader = (
     id: SectionId,
     title: string,
@@ -283,7 +291,7 @@ export default function SettingsScreen({
     </TouchableOpacity>
   );
 
-  // PRIVACY POLICY
+  // PRIVACY POLICY SCREEN
   if (showPrivacy) {
     return (
       <LegalDocumentScreen
@@ -444,9 +452,9 @@ export default function SettingsScreen({
               </View>
 
               <Text style={styles.previewNote}>
-                This settings switch is
-                currently a preview and
-                does not change audio playback.
+                This switch is a preview
+                and does not currently
+                control audio playback.
               </Text>
 
             </View>
@@ -518,8 +526,7 @@ export default function SettingsScreen({
 
               <Text style={styles.previewNote}>
                 Account deletion requests
-                can be sent to
-                {' '}
+                can be sent to{' '}
                 {SUPPORT_EMAIL}.
               </Text>
 
@@ -528,7 +535,7 @@ export default function SettingsScreen({
 
         </View>
 
-        {/* SIGN OUT */}
+        {/* SIGN OUT BUTTON */}
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
@@ -547,7 +554,7 @@ export default function SettingsScreen({
 
         </TouchableOpacity>
 
-        {/* DELETE ACCOUNT */}
+        {/* DELETE ACCOUNT BUTTON */}
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={handleDeleteAccount}
@@ -560,10 +567,11 @@ export default function SettingsScreen({
         </TouchableOpacity>
 
         <Text style={styles.deletionNote}>
-          Deletion requests are sent by email
-          and processed manually within
-          30 days. Opening the email app
-          alone does not submit a request.
+          Deletion requests are sent by
+          email and processed manually
+          within 30 days. The user must
+          send the email to submit the
+          request.
         </Text>
 
       </ScrollView>

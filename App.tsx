@@ -9,14 +9,12 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Platform,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  type ImageSourcePropType,
 } from 'react-native';
 
 import {
@@ -29,6 +27,10 @@ import type {
   User,
 } from '@react-native-firebase/auth';
 
+import type {
+  SvgProps,
+} from 'react-native-svg';
+
 // AUTHENTICATION SCREENS
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -37,12 +39,12 @@ import VerifyEmailScreen from './src/screens/VerifyEmailScreen';
 import MFASetupScreen from './src/screens/MFASetupScreen';
 import MFAVerifyScreen from './src/screens/MFAVerifyScreen';
 
-// MAIN SCREENS
+// MAIN APP SCREENS
 import HomeScreen from './src/screens/HomeScreen';
 import LearningScreen from './src/screens/LearningScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
-// TERMS ACCEPTANCE
+// TERMS OF SERVICE
 import TermsAcceptanceScreen from './src/screens/TermsAcceptanceScreen';
 
 // FIREBASE AUTHENTICATION
@@ -52,6 +54,11 @@ import {
   logoutUser,
   userHasMFA,
 } from './src/services/authService';
+
+// SVG ICONS
+import PawIcon from './assets/icons/paw-icon.svg';
+import BookIcon from './assets/icons/book-icon.svg';
+import CogIcon from './assets/icons/cog-icon.svg';
 
 // SCREEN TYPES
 type Screen =
@@ -73,11 +80,11 @@ type MainTab =
 // BOTTOM NAVIGATION ICONS
 const TAB_ICONS: Record<
   MainTab,
-  ImageSourcePropType
+  React.ComponentType<SvgProps>
 > = {
-  home: require('./assets/icons/paw-icon.png'),
-  learning: require('./assets/icons/book-icon.png'),
-  settings: require('./assets/icons/cog-icon.png'),
+  home: PawIcon,
+  learning: BookIcon,
+  settings: CogIcon,
 };
 
 const TABS: {
@@ -147,45 +154,46 @@ function AppContent() {
     useRef(false);
 
   // TERMS ACCEPTED CALLBACK
-  const handleTermsAccepted =
-    useCallback(
-      (uid: string) => {
-        setTermsAcceptedUid(uid);
-      },
-      [],
-    );
+  const handleTermsAccepted = useCallback(
+    (uid: string) => {
+      setTermsAcceptedUid(uid);
+    },
+    [],
+  );
 
-  // LISTEN FOR FIREBASE AUTHENTICATION
+  // FIREBASE AUTHENTICATION LISTENER
   useEffect(() => {
-    const unsubscribe =
-      listenToAuthState(
-        (user: User | null) => {
-          if (!user) {
-            setTermsAcceptedUid(null);
+    const unsubscribe = listenToAuthState(
+      (user: User | null) => {
+        if (!user) {
+          setTermsAcceptedUid(null);
 
-            if (
-              goToLoginAfterSignOut.current
-            ) {
-              goToLoginAfterSignOut.current =
-                false;
+          if (
+            goToLoginAfterSignOut.current
+          ) {
+            goToLoginAfterSignOut.current =
+              false;
 
-              setCurrentScreen('login');
-            } else {
-              setCurrentScreen('welcome');
-            }
-          } else if (!user.emailVerified) {
-            setCurrentScreen(
-              'verifyEmail',
-            );
-          } else if (!userHasMFA(user)) {
-            setCurrentScreen('mfaSetup');
+            setCurrentScreen('login');
           } else {
-            setCurrentScreen('home');
+            setCurrentScreen('welcome');
           }
+        } else if (!user.emailVerified) {
+          // EMAIL VERIFICATION REQUIRED
+          setCurrentScreen(
+            'verifyEmail',
+          );
+        } else if (!userHasMFA(user)) {
+          // MFA REQUIRED
+          setCurrentScreen('mfaSetup');
+        } else {
+          // AUTHENTICATION SUCCESSFUL
+          setCurrentScreen('home');
+        }
 
-          setCheckingLogin(false);
-        },
-      );
+        setCheckingLogin(false);
+      },
+    );
 
     return unsubscribe;
   }, []);
@@ -250,7 +258,7 @@ function AppContent() {
           />
         );
 
-      // REGISTRATION
+      // REGISTRATION SCREEN
       case 'register':
         return (
           <RegisterScreen
@@ -263,7 +271,7 @@ function AppContent() {
           />
         );
 
-      // VERIFY EMAIL
+      // EMAIL VERIFICATION
       case 'verifyEmail':
         return (
           <VerifyEmailScreen
@@ -377,7 +385,7 @@ function AppContent() {
         }
 
         // TERMS MUST BE ACCEPTED
-        // BEFORE OPENING MAIN APP
+        // BEFORE OPENING MAIN SCREENS
         if (
           termsAcceptedUid !== user.uid
         ) {
@@ -394,7 +402,6 @@ function AppContent() {
           );
         }
 
-        // MAIN SCREEN WITH BOTTOM TABS
         return (
           <View style={styles.mainLayout}>
 
@@ -438,8 +445,15 @@ function AppContent() {
 
               {TABS.map(tab => {
                 const selected =
-                  currentScreen ===
-                  tab.id;
+                  currentScreen === tab.id;
+
+                const IconComponent =
+                  TAB_ICONS[tab.id];
+
+                const iconColor =
+                  selected
+                    ? '#035643'
+                    : '#777777';
 
                 return (
                   <TouchableOpacity
@@ -462,26 +476,16 @@ function AppContent() {
                       tab.label
                     }>
 
-                    {/* ICON */}
-                    <Image
-                      source={
-                        TAB_ICONS[
-                          tab.id
-                        ]
-                      }
-                      style={[
-                        styles.bottomIcon,
-                        {
-                          tintColor:
-                            selected
-                              ? '#035643'
-                              : '#777777',
-                        },
-                      ]}
-                      resizeMode="contain"
+                    {/* SVG ICON */}
+                    <IconComponent
+                      width={22}
+                      height={22}
+                      fill={iconColor}
+                      stroke={iconColor}
+                      color={iconColor}
                     />
 
-                    {/* LABEL */}
+                    {/* TAB LABEL */}
                     <Text
                       style={[
                         styles.bottomText,
@@ -635,11 +639,6 @@ const styles = StyleSheet.create({
 
   bottomItemSelected: {
     backgroundColor: '#DFEFE7',
-  },
-
-  bottomIcon: {
-    width: 22,
-    height: 22,
   },
 
   bottomText: {
