@@ -31,14 +31,12 @@ import {
   PRIVACY_POLICY,
 } from './legalDocuments';
 
-// SETTINGS SCREEN PROPS
 type Props = {
   email: string;
   onLogout: () => void | Promise<void>;
   onReturnHome?: () => void;
 };
 
-// DROPDOWN SECTIONS
 type SectionId =
   | 'account'
   | 'notifications'
@@ -49,7 +47,6 @@ type SectionId =
 type SectionsState =
   Record<SectionId, boolean>;
 
-// INDIGIPET COLOURS
 const COLORS = {
   darkGreen: '#035643',
   cream: '#FFFBEF',
@@ -64,19 +61,14 @@ const COLORS = {
   border: '#D4C7B0',
 };
 
-// EXACT CLIENT-PROVIDED LANGUAGE CREDITS
-const LANGUAGE_CREDITS =
-  'Chi-miigwech to Corey Whitford for sharing his voice and knowledge. ' +
-  'Written and audio translations were provided by Corey Whitford from Sandy Bay First Nation. ' +
-  'We acknowledge that Indigenous languages can vary between communities, families, and speakers. ' +
-  'Some words, spellings, or translations may differ from what you know or use.';
+const SUPPORT_EMAIL =
+  'support@giigidomikinaak.ca';
 
 export default function SettingsScreen({
   email,
   onLogout,
   onReturnHome,
 }: Props) {
-  // COLLAPSIBLE SETTINGS SECTIONS
   const [sections, setSections] =
     useState<SectionsState>({
       account: false,
@@ -86,29 +78,26 @@ export default function SettingsScreen({
       legal: false,
     });
 
-  // PRIVACY POLICY SCREEN
   const [showPrivacy, setShowPrivacy] =
     useState(false);
 
-  // NOTIFICATION SETTINGS
   const [
     notificationsEnabled,
     setNotificationsEnabled,
   ] = useState(false);
 
-  // SOUND SETTINGS
-  const [soundEnabled, setSoundEnabled] =
-    useState(false);
+  const [
+    soundEnabled,
+    setSoundEnabled,
+  ] = useState(false);
 
-  // USER ACCOUNT
   const [username, setUsername] =
     useState('Not available');
 
-  // LOGOUT STATUS
   const [savingLogout, setSavingLogout] =
     useState(false);
 
-  // LOAD USER ACCOUNT DETAILS FROM FIREBASE
+  // LOAD ACCOUNT DETAILS FROM FIREBASE
   useEffect(() => {
     const user = getCurrentUser();
 
@@ -137,8 +126,6 @@ export default function SettingsScreen({
           setUsername(
             String(data.name),
           );
-        } else {
-          setUsername('Not available');
         }
       },
       error => {
@@ -152,21 +139,19 @@ export default function SettingsScreen({
     return unsubscribe;
   }, []);
 
-  // OPEN OR CLOSE SETTINGS SECTION
-  const toggleSection = (
-    id: SectionId,
-  ) => {
+  // EXPAND OR COLLAPSE SETTINGS
+  const toggleSection = (id: SectionId) => {
     setSections(previous => ({
       ...previous,
       [id]: !previous[id],
     }));
   };
 
-  // SIGN OUT USER
+  // SIGN OUT
   const handleSignOut = () => {
     Alert.alert(
       'Sign Out',
-      'Are you sure you want to sign out?',
+      'Are you sure you want to sign out of IndigiPet?',
       [
         {
           text: 'Cancel',
@@ -199,14 +184,15 @@ export default function SettingsScreen({
   };
 
   // REQUEST ACCOUNT DELETION BY EMAIL
-  // THIS DOES NOT DIRECTLY DELETE USER
+  // WORKS WITHOUT CLOUD FUNCTIONS.
+  // DOES NOT AUTOMATICALLY DELETE ACCOUNT.
   const handleDeleteAccount = () => {
     Alert.alert(
       'Request Account Deletion',
-      'Contact support to request permanent deletion of your account and saved data. This does not delete your account immediately.',
+      'You can request permanent deletion of your IndigiPet account and personal information. Your pet, coins, XP, and learning progress will also be deleted. Requests must be processed within 30 days. Please send the email from your registered account address.',
       [
         {
-          text: 'Cancel',
+          text: 'Keep Account',
           style: 'cancel',
         },
         {
@@ -219,26 +205,50 @@ export default function SettingsScreen({
 
             const body =
               encodeURIComponent(
-                'Hello,\n\n' +
-                  'Please delete my IndigiPet account and associated data.\n\n' +
-                  'Account email: ' +
-                  email +
-                  '\n\nThank you.',
+                'Hello IndigiPet Support,\n\n' +
+                'I would like to request permanent deletion of my IndigiPet account and all associated personal data.\n\n' +
+                'Registered account email: ' +
+                (email ||
+                  '[Enter registered email]') +
+                '\n\n' +
+                'I understand that my pet, coins, XP, and learning progress will be permanently removed.\n\n' +
+                'Please process my request within 30 days and confirm when deletion is complete.\n\n' +
+                'Thank you.',
               );
 
-            const url =
-              'mailto:support@giigidomikinaak.ca' +
+            const mailto =
+              'mailto:' +
+              SUPPORT_EMAIL +
               '?subject=' +
               subject +
               '&body=' +
               body;
 
             try {
-              await Linking.openURL(url);
-            } catch {
+              const supported =
+                await Linking.canOpenURL(
+                  mailto,
+                );
+
+              if (!supported) {
+                Alert.alert(
+                  'Email App Not Available',
+                  'Please send your account deletion request from your registered email address to ' +
+                    SUPPORT_EMAIL +
+                    '.',
+                );
+                return;
+              }
+
+              await Linking.openURL(
+                mailto,
+              );
+            } catch (error) {
               Alert.alert(
-                'Email App Unavailable',
-                'Please email support@giigidomikinaak.ca.',
+                'Unable to Open Email',
+                'Please email ' +
+                  SUPPORT_EMAIL +
+                  ' from your registered account email address.',
               );
             }
           },
@@ -247,14 +257,16 @@ export default function SettingsScreen({
     );
   };
 
-  // CREATE DROPDOWN HEADER
+  // SECTION DROPDOWN
   const renderHeader = (
     id: SectionId,
     title: string,
   ) => (
     <TouchableOpacity
       style={styles.sectionHeader}
-      onPress={() => toggleSection(id)}
+      onPress={() =>
+        toggleSection(id)
+      }
       accessibilityRole="button"
       accessibilityState={{
         expanded: sections[id],
@@ -267,10 +279,11 @@ export default function SettingsScreen({
       <Text style={styles.chevron}>
         {sections[id] ? '⌃' : '⌄'}
       </Text>
+
     </TouchableOpacity>
   );
 
-  // SHOW PRIVACY POLICY
+  // PRIVACY POLICY
   if (showPrivacy) {
     return (
       <LegalDocumentScreen
@@ -282,27 +295,32 @@ export default function SettingsScreen({
     );
   }
 
-  // MAIN SETTINGS SCREEN
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
 
-      {/* DARK GREEN HEADER */}
+      <StatusBar
+        barStyle="light-content"
+      />
+
+      {/* HEADER */}
       <View style={styles.header}>
+
         <TouchableOpacity
           style={styles.backButton}
           onPress={onReturnHome}
           accessibilityRole="button"
-          accessibilityLabel="Back to Home">
+          accessibilityLabel="Return to Home">
 
           <Text style={styles.backArrow}>
             ‹
           </Text>
+
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>
           Settings
         </Text>
+
       </View>
 
       <ScrollView
@@ -312,8 +330,9 @@ export default function SettingsScreen({
         }
         showsVerticalScrollIndicator={false}>
 
-        {/* ACCOUNT SECTION */}
+        {/* ACCOUNT */}
         <View style={styles.sectionCard}>
+
           {renderHeader(
             'account',
             'Account',
@@ -321,6 +340,7 @@ export default function SettingsScreen({
 
           {sections.account && (
             <View style={styles.sectionBody}>
+
               <Text style={styles.detailText}>
                 Username: {username}
               </Text>
@@ -328,12 +348,15 @@ export default function SettingsScreen({
               <Text style={styles.detailText}>
                 Email: {email}
               </Text>
+
             </View>
           )}
+
         </View>
 
-        {/* NOTIFICATIONS SECTION */}
+        {/* NOTIFICATIONS */}
         <View style={styles.sectionCard}>
+
           {renderHeader(
             'notifications',
             'Notifications',
@@ -341,12 +364,14 @@ export default function SettingsScreen({
 
           {sections.notifications && (
             <View style={styles.sectionBody}>
+
               <Text style={styles.description}>
                 Esiban will let you know
                 when he's hungry or misses you.
               </Text>
 
               <View style={styles.switchRow}>
+
                 <Switch
                   value={notificationsEnabled}
                   onValueChange={
@@ -365,18 +390,23 @@ export default function SettingsScreen({
                     ? 'On'
                     : 'Off'}
                 </Text>
+
               </View>
 
               <Text style={styles.previewNote}>
-                Notifications will be
-                connected in a future update.
+                Notification delivery will
+                be connected in a future
+                update.
               </Text>
+
             </View>
           )}
+
         </View>
 
-        {/* SOUND SECTION */}
+        {/* SOUND */}
         <View style={styles.sectionCard}>
+
           {renderHeader(
             'sound',
             'Sound',
@@ -384,12 +414,14 @@ export default function SettingsScreen({
 
           {sections.sound && (
             <View style={styles.sectionBody}>
+
               <Text style={styles.description}>
                 Enable or disable voice-over
-                for lessons.
+                for learning activities.
               </Text>
 
               <View style={styles.switchRow}>
+
                 <Switch
                   value={soundEnabled}
                   onValueChange={
@@ -408,19 +440,23 @@ export default function SettingsScreen({
                     ? 'On'
                     : 'Off'}
                 </Text>
+
               </View>
 
               <Text style={styles.previewNote}>
-                Audio controls will work
-                when lesson recordings
-                are added.
+                This settings switch is
+                currently a preview and
+                does not change audio playback.
               </Text>
+
             </View>
           )}
+
         </View>
 
-        {/* ABOUT SECTION */}
+        {/* ABOUT */}
         <View style={styles.sectionCard}>
+
           {renderHeader(
             'about',
             'About',
@@ -428,49 +464,71 @@ export default function SettingsScreen({
 
           {sections.about && (
             <View style={styles.sectionBody}>
+
               <Text style={styles.detailText}>
                 App Version: Development Preview
               </Text>
 
-              {/* NEW LANGUAGE CREDITS */}
               <Text style={styles.creditsTitle}>
                 Language Credits
               </Text>
 
-              <View style={styles.creditsBox}>
-                <Text style={styles.creditsText}>
-                  {LANGUAGE_CREDITS}
-                </Text>
-              </View>
+              <Text style={styles.creditsText}>
+                Chi-miigwech to Corey Whitford
+                for sharing his voice and
+                knowledge. Written and audio
+                translations were provided by
+                Corey Whitford from Sandy Bay
+                First Nation. We acknowledge
+                that Indigenous languages can
+                vary between communities,
+                families, and speakers. Some
+                words, spellings, or
+                translations may differ from
+                what you know or use.
+              </Text>
+
             </View>
           )}
+
         </View>
 
-        {/* PRIVACY POLICY SECTION */}
+        {/* PRIVACY AND HELP */}
         <View style={styles.sectionCard}>
+
           {renderHeader(
             'legal',
-            'Privacy & Help',
+            'Legal & Help',
           )}
 
           {sections.legal && (
             <View style={styles.sectionBody}>
+
               <TouchableOpacity
                 onPress={() =>
                   setShowPrivacy(true)
                 }
-                accessibilityRole="button"
-                accessibilityLabel="Read Privacy Policy">
+                accessibilityRole="button">
 
                 <Text style={styles.legalLink}>
-                  Privacy Policy ›
+                  Privacy Policy  ›
                 </Text>
+
               </TouchableOpacity>
+
+              <Text style={styles.previewNote}>
+                Account deletion requests
+                can be sent to
+                {' '}
+                {SUPPORT_EMAIL}.
+              </Text>
+
             </View>
           )}
+
         </View>
 
-        {/* SIGN OUT BUTTON */}
+        {/* SIGN OUT */}
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
@@ -486,9 +544,10 @@ export default function SettingsScreen({
               Sign Out
             </Text>
           )}
+
         </TouchableOpacity>
 
-        {/* DELETE ACCOUNT BUTTON */}
+        {/* DELETE ACCOUNT */}
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={handleDeleteAccount}
@@ -497,13 +556,22 @@ export default function SettingsScreen({
           <Text style={styles.actionButtonText}>
             Delete Account
           </Text>
+
         </TouchableOpacity>
+
+        <Text style={styles.deletionNote}>
+          Deletion requests are sent by email
+          and processed manually within
+          30 days. Opening the email app
+          alone does not submit a request.
+        </Text>
+
       </ScrollView>
+
     </SafeAreaView>
   );
 }
 
-// SETTINGS STYLES
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -528,6 +596,7 @@ const styles = StyleSheet.create({
   backArrow: {
     fontSize: 34,
     color: '#FFFFFF',
+    fontWeight: '400',
   },
 
   headerTitle: {
@@ -576,6 +645,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 27,
     fontWeight: 'bold',
+    marginLeft: 10,
   },
 
   sectionBody: {
@@ -600,6 +670,20 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
 
+  creditsTitle: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: COLORS.darkGreen,
+    marginTop: 12,
+  },
+
+  creditsText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: COLORS.text,
+    marginTop: 8,
+  },
+
   previewNote: {
     color: COLORS.mutedText,
     fontSize: 14,
@@ -620,31 +704,6 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 
-  // LANGUAGE CREDITS STYLING
-  creditsTitle: {
-    color: COLORS.darkGreen,
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 15,
-    marginBottom: 10,
-  },
-
-  creditsBox: {
-    backgroundColor: '#EAF5E9',
-    borderColor: '#B3D5B0',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 13,
-    marginBottom: 5,
-  },
-
-  creditsText: {
-    color: COLORS.text,
-    fontSize: 16,
-    lineHeight: 25,
-    fontWeight: '400',
-  },
-
   legalLink: {
     color: COLORS.text,
     fontSize: 16,
@@ -662,6 +721,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 5,
     marginBottom: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.tealShadow,
   },
 
   deleteButton: {
@@ -676,5 +737,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: 'bold',
+  },
+
+  deletionNote: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.mutedText,
+    textAlign: 'center',
+    marginTop: 10,
   },
 });

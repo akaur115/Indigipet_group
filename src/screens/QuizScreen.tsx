@@ -4,13 +4,17 @@ import React, {useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
   type DimensionValue,
 } from 'react-native';
+
+import Svg, {Path} from 'react-native-svg';
 
 import {
   QUIZ_CATEGORY_NAMES,
@@ -43,9 +47,6 @@ import {
   stopWordAudio,
 } from '../services/audioService';
 
-// SVG VOLUME ICON
-import VolumeIcon from '../../assets/icons/volume-icon.svg';
-
 type Props = {
   uid: string;
   categoryId: QuizCategoryId;
@@ -66,13 +67,53 @@ type SaveState =
 
 const COLORS = {
   green: '#035643',
+  darkGreen: '#023B30',
   teal: '#089BA1',
+  audioGreen: '#087D69',
   cream: '#FFFBEF',
   card: '#FFFBF0',
   border: '#E3DACB',
   brown: '#554E43',
-  orange: '#EC6E00',
+  orange: '#D66A0D',
+  disabledOrange: '#A86535',
+  success: '#08664C',
+  incorrect: '#964925',
 };
+
+// VISIBLE WHITE SPEAKER ICON
+function SpeakerIcon() {
+  return (
+    <Svg
+      width={21}
+      height={21}
+      viewBox="0 0 24 24"
+      fill="none">
+
+      <Path
+        d="M11 5L6 9H3V15H6L11 19V5Z"
+        stroke="#FFFFFF"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      <Path
+        d="M15.5 8.5C17.2 10.4 17.2 13.6 15.5 15.5"
+        stroke="#FFFFFF"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+
+      <Path
+        d="M18.5 5.5C22 9 22 15 18.5 18.5"
+        stroke="#FFFFFF"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+
+    </Svg>
+  );
+}
 
 const TIER_COLORS: Record<
   MasteryTier,
@@ -104,6 +145,9 @@ export default function QuizScreen({
   categoryId,
   onExit,
 }: Props) {
+  const {height} = useWindowDimensions();
+  const compact = height < 740;
+
   const [phase, setPhase] =
     useState<Phase>('loading');
 
@@ -151,7 +195,7 @@ export default function QuizScreen({
   const sessionId = useRef(uniqueId());
   const audioRequest = useRef(0);
 
-  // LOAD QUIZ FROM FIREBASE
+  // LOAD QUIZ
   useEffect(() => {
     let active = true;
 
@@ -167,10 +211,11 @@ export default function QuizScreen({
       sessionId.current = uniqueId();
 
       try {
-        const progress = await loadQuizProgress(
-          uid,
-          categoryId,
-        );
+        const progress =
+          await loadQuizProgress(
+            uid,
+            categoryId,
+          );
 
         const nextPool = sessionPool(
           categoryId,
@@ -200,6 +245,7 @@ export default function QuizScreen({
         setCurrent(first);
         setOptions(answerOptions(first));
         setPhase('playing');
+
       } catch (error: any) {
         if (active) {
           setLoadError(
@@ -219,7 +265,7 @@ export default function QuizScreen({
     };
   }, [uid, categoryId, retryNumber]);
 
-  // STOP AUDIO WHEN QUIZ CLOSES
+  // CLEAN UP AUDIO
   useEffect(() => {
     return () => {
       audioRequest.current += 1;
@@ -235,10 +281,7 @@ export default function QuizScreen({
 
   // PLAY WORD AUDIO
   const handleAudio = async () => {
-    if (
-      !current ||
-      !current.audio_file_path
-    ) {
+    if (!current || !current.audio_file_path) {
       Alert.alert(
         'Audio unavailable',
         'This word does not have a recording yet.',
@@ -252,7 +295,6 @@ export default function QuizScreen({
     }
 
     const request = ++audioRequest.current;
-
     setPlayingAudio(true);
 
     try {
@@ -272,19 +314,16 @@ export default function QuizScreen({
     }
   };
 
-  // CALCULATE SCORE
   const score = answers.filter(
     answer => answer.correct,
   ).length;
 
   const rewards = calculateRewards(score);
 
-  const answered =
-    selectedId !== null;
+  const answered = selectedId !== null;
 
   const isCorrect = Boolean(
-    current &&
-    selectedId === current.id,
+    current && selectedId === current.id,
   );
 
   const questionNumber = Math.min(
@@ -292,7 +331,7 @@ export default function QuizScreen({
     QUESTIONS_PER_SESSION,
   );
 
-  // CHOOSE ANSWER
+  // ANSWER A QUESTION
   const chooseAnswer = (id: string) => {
     if (
       !current ||
@@ -324,7 +363,7 @@ export default function QuizScreen({
     );
   };
 
-  // SAVE QUIZ RESULTS
+  // SAVE FIREBASE PROGRESS
   const saveFinishedQuiz = async (
     finalAnswers: AnswerEvent[],
     finalProgress: CategoryQuizProgress,
@@ -334,6 +373,7 @@ export default function QuizScreen({
     }
 
     savingLock.current = true;
+
     setSaveState('saving');
     setSaveError('');
 
@@ -400,7 +440,7 @@ export default function QuizScreen({
     setSelectedId(null);
   };
 
-  // GO BACK
+  // EXIT QUIZ
   const goBack = () => {
     if (
       phase === 'results' &&
@@ -432,7 +472,6 @@ export default function QuizScreen({
           },
         ],
       );
-
       return;
     }
 
@@ -440,28 +479,28 @@ export default function QuizScreen({
     onExit();
   };
 
-  // PLAY AGAIN
   const restart = () => {
     stopAudio();
     setRetryNumber(value => value + 1);
   };
 
-  const wordResults = QUIZ_WORDS[
-    categoryId
-  ].filter(word =>
-    answers.some(
-      answer => answer.wordId === word.id,
-    ),
-  );
+  const wordResults =
+    QUIZ_WORDS[categoryId].filter(
+      word =>
+        answers.some(
+          answer => answer.wordId === word.id,
+        ),
+    );
 
   return (
     <View style={styles.screen}>
 
-      {/* QUIZ HEADER */}
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.back}
           onPress={goBack}>
+
           <Text style={styles.backText}>
             ‹
           </Text>
@@ -492,14 +531,13 @@ export default function QuizScreen({
             size="large"
             color={COLORS.teal}
           />
-
           <Text style={styles.info}>
             Loading quiz...
           </Text>
         </View>
       )}
 
-      {/* ERROR SCREEN */}
+      {/* ERROR */}
       {phase === 'error' && (
         <View style={styles.center}>
           <Text style={styles.sectionHeading}>
@@ -520,14 +558,15 @@ export default function QuizScreen({
         </View>
       )}
 
-      {/* QUESTION SCREEN */}
+      {/* QUIZ QUESTIONS */}
       {phase === 'playing' && current && (
-        <ScrollView
-          style={styles.playScroll}
-          contentContainerStyle={styles.playArea}
-          showsVerticalScrollIndicator={false}>
+        <View
+          style={[
+            styles.playArea,
+            compact && styles.playAreaCompact,
+          ]}>
 
-          {/* PROGRESS */}
+          {/* PROGRESS BAR */}
           <View style={styles.progressTrack}>
             <View
               style={[
@@ -549,43 +588,55 @@ export default function QuizScreen({
             {QUESTIONS_PER_SESSION}
           </Text>
 
-          <Text style={styles.questionTitle}>
+          <Text
+            style={[
+              styles.questionTitle,
+              compact && styles.questionTitleCompact,
+            ]}>
             Choose the Ojibwe word for:
           </Text>
 
-          {/* WORD AND SPEAKER */}
-          <View style={styles.promptCard}>
-            <Text style={styles.prompt}>
+          {/* WORD CARD */}
+          <View
+            style={[
+              styles.promptCard,
+              compact && styles.promptCardCompact,
+            ]}>
+
+            <Text
+              style={[
+                styles.prompt,
+                compact && styles.promptCompact,
+              ]}>
               {current.word_english}
             </Text>
 
-            <TouchableOpacity
-              style={[
+            {/* UPDATED DARK SOUND BUTTON */}
+            <Pressable
+              style={({pressed}) => [
                 styles.audioButton,
-                playingAudio &&
+                (pressed || playingAudio) &&
                   styles.audioButtonActive,
               ]}
-              onPress={() =>
-                void handleAudio()
-              }
+              onPress={() => void handleAudio()}
               accessibilityRole="button"
               accessibilityLabel="Play Ojibwe pronunciation">
 
-              <VolumeIcon
-                width={20}
-                height={18}
-              />
+              <SpeakerIcon />
 
               <Text style={styles.audioButtonText}>
-                {playingAudio
-                  ? 'Stop audio'
-                  : 'Listen'}
+                {playingAudio ? 'Stop audio' : 'Listen'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
-          {/* ANSWER OPTIONS */}
-          <View style={styles.answers}>
+          {/* ANSWERS */}
+          <View
+            style={[
+              styles.answers,
+              compact && styles.answersCompact,
+            ]}>
+
             {options.map((option, index) => {
               const showCorrect =
                 answered &&
@@ -601,12 +652,12 @@ export default function QuizScreen({
                   key={option.id}
                   style={[
                     styles.answer,
-                    showCorrect &&
-                      styles.correctAnswer,
-                    showWrong &&
-                      styles.wrongAnswer,
+                    compact && styles.answerCompact,
+                    showCorrect && styles.correctAnswer,
+                    showWrong && styles.wrongAnswer,
                   ]}
                   disabled={answered}
+                  activeOpacity={0.8}
                   onPress={() =>
                     chooseAnswer(option.id)
                   }>
@@ -615,7 +666,12 @@ export default function QuizScreen({
                     {['A', 'B', 'C', 'D'][index]}
                   </Text>
 
-                  <Text style={styles.answerText}>
+                  <Text
+                    style={[
+                      styles.answerText,
+                      compact && styles.answerTextCompact,
+                    ]}
+                    numberOfLines={2}>
                     {option.word_ojibwe}
                   </Text>
 
@@ -630,15 +686,18 @@ export default function QuizScreen({
                       ✕
                     </Text>
                   )}
+
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          {/* ANSWER FEEDBACK */}
+          {/* FEEDBACK */}
           <View
+            accessibilityLiveRegion="polite"
             style={[
               styles.feedback,
+              compact && styles.feedbackCompact,
               answered
                 ? isCorrect
                   ? styles.feedbackGood
@@ -650,7 +709,7 @@ export default function QuizScreen({
               <>
                 <Text style={styles.feedbackTitle}>
                   {isCorrect
-                    ? 'Great job!'
+                    ? '✓ Great job!'
                     : 'Keep practicing!'}
                 </Text>
 
@@ -667,41 +726,38 @@ export default function QuizScreen({
             )}
           </View>
 
-          {/* NEXT BUTTON */}
+          {/* NEXT QUESTION */}
           <TouchableOpacity
             style={[
               styles.next,
-              !answered &&
-                styles.disabled,
+              !answered && styles.nextDisabled,
             ]}
             disabled={!answered}
+            activeOpacity={0.85}
             onPress={nextQuestion}>
 
-            <Text style={styles.buttonText}>
+            <Text style={styles.nextText}>
               {answers.length ===
               QUESTIONS_PER_SESSION
-                ? 'See Results'
+                ? 'See Results →'
                 : 'Next Question →'}
             </Text>
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       )}
 
       {/* RESULTS SCREEN */}
       {phase === 'results' && (
         <ScrollView
           style={styles.resultsScroll}
-          contentContainerStyle={
-            styles.resultsContent
-          }
+          contentContainerStyle={styles.resultsContent}
           showsVerticalScrollIndicator={false}>
 
           {/* SCORE */}
           <View style={styles.scoreCard}>
             <View>
               <Text style={styles.scoreBig}>
-                {score} /{' '}
-                {QUESTIONS_PER_SESSION}
+                {score} / {QUESTIONS_PER_SESSION}
               </Text>
 
               <Text style={styles.scoreLabel}>
@@ -754,7 +810,7 @@ export default function QuizScreen({
             Words practiced
           </Text>
 
-          {/* BIGGER WORD CARDS */}
+          {/* WORD PROGRESS */}
           <View style={styles.wordGrid}>
             {wordResults.map(word => {
               const before: MasteryTier =
@@ -786,8 +842,7 @@ export default function QuizScreen({
                         styles.tierBadge,
                         {
                           backgroundColor:
-                            TIER_COLORS[before]
-                              .background,
+                            TIER_COLORS[before].background,
                         },
                       ]}>
 
@@ -796,8 +851,7 @@ export default function QuizScreen({
                           styles.tierText,
                           {
                             color:
-                              TIER_COLORS[before]
-                                .color,
+                              TIER_COLORS[before].color,
                           },
                         ]}>
                         {tierLabel(before)}
@@ -813,8 +867,7 @@ export default function QuizScreen({
                         styles.tierBadge,
                         {
                           backgroundColor:
-                            TIER_COLORS[after]
-                              .background,
+                            TIER_COLORS[after].background,
                         },
                       ]}>
 
@@ -823,8 +876,7 @@ export default function QuizScreen({
                           styles.tierText,
                           {
                             color:
-                              TIER_COLORS[after]
-                                .color,
+                              TIER_COLORS[after].color,
                           },
                         ]}>
                         {tierLabel(after)}
@@ -836,7 +888,7 @@ export default function QuizScreen({
             })}
           </View>
 
-          {/* SAVE PROGRESS */}
+          {/* SAVE STATUS */}
           <View style={styles.saveArea}>
             {saveState === 'saving' && (
               <Text style={styles.info}>
@@ -864,7 +916,6 @@ export default function QuizScreen({
                       draftProgress,
                     )
                   }>
-
                   <Text style={styles.buttonText}>
                     Retry Save
                   </Text>
@@ -873,7 +924,7 @@ export default function QuizScreen({
             )}
           </View>
 
-          {/* RESULT ACTIONS */}
+          {/* ACTION BUTTONS */}
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[
@@ -905,6 +956,7 @@ export default function QuizScreen({
               </Text>
             </TouchableOpacity>
           </View>
+
         </ScrollView>
       )}
     </View>
@@ -917,7 +969,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cream,
   },
 
-  // HEADER
   header: {
     height: 52,
     backgroundColor: COLORS.green,
@@ -937,21 +988,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   headerSub: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#D8ECE5',
   },
   counter: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
 
-  // LOADING
   center: {
     flex: 1,
     alignItems: 'center',
@@ -960,21 +1010,24 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   info: {
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.brown,
     textAlign: 'center',
   },
 
-  // QUESTION SCREEN
-  playScroll: {
-    flex: 1,
-  },
+  // QUIZ LAYOUT
   playArea: {
-    flexGrow: 1,
+    flex: 1,
+    minHeight: 0,
     paddingHorizontal: 12,
     paddingTop: 10,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
+  playAreaCompact: {
+    paddingTop: 7,
+    paddingBottom: 7,
+  },
+
   progressTrack: {
     height: 7,
     backgroundColor: '#F3E9CF',
@@ -988,70 +1041,104 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 12,
+    lineHeight: 17,
     fontWeight: 'bold',
     letterSpacing: 0.5,
     color: '#08797A',
     marginBottom: 5,
   },
   questionTitle: {
-    fontSize: 17,
+    fontSize: 19,
+    lineHeight: 25,
     fontWeight: 'bold',
     color: COLORS.green,
     marginBottom: 9,
   },
+  questionTitleCompact: {
+    fontSize: 18,
+    marginBottom: 7,
+  },
 
-  // QUESTION WORD AND SPEAKER
+  // QUESTION CARD
   promptCard: {
-    minHeight: 100,
+    minHeight: 104,
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  promptCardCompact: {
+    minHeight: 84,
+    paddingVertical: 6,
   },
   prompt: {
-    fontSize: 25,
+    fontSize: 29,
+    lineHeight: 35,
     fontWeight: 'bold',
     color: COLORS.green,
     textAlign: 'center',
   },
+  promptCompact: {
+    fontSize: 26,
+    lineHeight: 31,
+  },
+
+  // DARK SOUND BUTTON
   audioButton: {
+    minHeight: 40,
+    borderRadius: 22,
+    backgroundColor: COLORS.audioGreen,
+    borderWidth: 1,
+    borderColor: '#056C59',
+    paddingHorizontal: 15,
+    paddingVertical: 6,
+    marginTop: 7,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#DFEFE7',
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 7,
-    marginTop: 9,
-    gap: 7,
-    minHeight: 36,
+    gap: 8,
   },
   audioButtonActive: {
-    backgroundColor: '#A5DDD4',
+    backgroundColor: COLORS.darkGreen,
+    borderColor: '#012E25',
   },
   audioButtonText: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: 'bold',
-    color: COLORS.green,
+    color: '#FFFFFF',
   },
 
-  // ANSWER BUTTONS
+  // ANSWER OPTIONS
   answers: {
-    gap: 10,
-    marginTop: 13,
-    marginBottom: 11,
+    flex: 1,
+    minHeight: 0,
+    gap: 9,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  answersCompact: {
+    gap: 7,
+    marginTop: 9,
+    marginBottom: 9,
   },
   answer: {
-    minHeight: 47,
+    flex: 1,
+    minHeight: 42,
     borderRadius: 9,
     backgroundColor: COLORS.teal,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    justifyContent: 'center',
+    paddingHorizontal: 13,
+    paddingVertical: 6,
+  },
+  answerCompact: {
+    minHeight: 38,
+    paddingVertical: 4,
   },
   correctAnswer: {
     backgroundColor: '#168600',
@@ -1060,65 +1147,91 @@ const styles = StyleSheet.create({
     backgroundColor: '#B23F38',
   },
   optionLetter: {
-    width: 29,
-    fontSize: 16,
+    width: 31,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   answerText: {
     flex: 1,
     flexShrink: 1,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  answerTextCompact: {
     fontSize: 16,
     lineHeight: 21,
-    fontWeight: '600',
-    color: '#FFFFFF',
   },
   answerMark: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginLeft: 5,
+    marginLeft: 6,
   },
 
-  // FEEDBACK
+  // QUIZ FEEDBACK
   feedback: {
-    minHeight: 49,
+    minHeight: 64,
     borderRadius: 9,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
     justifyContent: 'center',
   },
+  feedbackCompact: {
+    minHeight: 56,
+    paddingVertical: 6,
+  },
   feedbackIdle: {
-    backgroundColor: '#F5F0E7',
+    backgroundColor: '#E8E2D5',
   },
   feedbackGood: {
-    backgroundColor: '#E8F6DF',
+    backgroundColor: COLORS.success,
   },
   feedbackBad: {
-    backgroundColor: '#FBE7E5',
+    backgroundColor: COLORS.incorrect,
   },
   feedbackTitle: {
-    fontSize: 14,
+    fontSize: 18,
+    lineHeight: 23,
     fontWeight: 'bold',
-    color: '#292521',
+    color: '#FFFFFF',
   },
   feedbackText: {
-    fontSize: 13,
-    color: '#292521',
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '600',
+    color: '#FFFFFF',
     marginTop: 2,
   },
+
+  // SLIGHTLY BOLDER INSTRUCTION
   feedbackHint: {
-    fontSize: 13,
-    color: COLORS.brown,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '700',
+    color: '#38342F',
     textAlign: 'center',
   },
+
   next: {
-    height: 44,
+    minHeight: 48,
     backgroundColor: COLORS.orange,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 12,
     marginTop: 9,
+  },
+  nextDisabled: {
+    backgroundColor: COLORS.disabledOrange,
+  },
+  nextText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   buttonText: {
     fontSize: 14,
@@ -1130,7 +1243,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
 
-  // RESULTS SCREEN
+  // RESULTS
   resultsScroll: {
     flex: 1,
   },
@@ -1177,8 +1290,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 3,
   },
-
-  // REWARDS
   rewardRow: {
     flexDirection: 'row',
     gap: 7,
@@ -1213,13 +1324,13 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
 
-  // WORDS PRACTICED
+  // PRACTICED WORDS
   wordGrid: {
     flexGrow: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    alignContent: 'stretch',
+    alignContent: 'flex-start',
     columnGap: 7,
     rowGap: 8,
   },
@@ -1267,7 +1378,7 @@ const styles = StyleSheet.create({
     color: COLORS.brown,
   },
 
-  // FIREBASE SAVE STATUS
+  // SAVE STATUS
   saveArea: {
     minHeight: 29,
     justifyContent: 'center',
@@ -1286,7 +1397,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // RESULT BUTTONS
+  // RESULT ACTIONS
   actionRow: {
     flexDirection: 'row',
     gap: 8,

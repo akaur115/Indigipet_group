@@ -62,7 +62,11 @@ const FOOD_SPEECH: Record<string, string> = {
   rice: "My tummy is full! You're the best!",
 };
 
-function ProgressBar({value}: {value: number}) {
+function ProgressBar({
+  value,
+}: {
+  value: number;
+}) {
   const safe = Math.max(
     0,
     Math.min(100, Number(value) || 0),
@@ -92,8 +96,8 @@ function CoinAmount({
   return (
     <View style={styles.coinRow}>
       <CoinIcon
-        width={small ? 15 : 20}
-        height={small ? 18 : 22}
+        width={small ? 16 : 21}
+        height={small ? 16 : 21}
       />
 
       <Text
@@ -108,13 +112,19 @@ function CoinAmount({
   );
 }
 
-export default function HomeScreen({uid}: Props) {
+export default function HomeScreen({
+  uid,
+}: Props) {
   const [game, setGame] =
     useState<GameData | null>(null);
 
   const [now, setNow] = useState(Date.now());
-  const [errorText, setErrorText] = useState('');
-  const [feeding, setFeeding] = useState(false);
+
+  const [errorText, setErrorText] =
+    useState('');
+
+  const [feeding, setFeeding] =
+    useState(false);
 
   const [dialogueNumber, setDialogueNumber] =
     useState(0);
@@ -125,7 +135,7 @@ export default function HomeScreen({uid}: Props) {
   const [lastQuizAt, setLastQuizAt] =
     useState(0);
 
-  // LOAD AND SUBSCRIBE TO GAME DATA
+  // LOAD PET DATA FROM FIREBASE
   useEffect(() => {
     let active = true;
     let unsubscribe = () => {};
@@ -163,19 +173,19 @@ export default function HomeScreen({uid}: Props) {
         }
       });
 
-    // REFRESH HUNGER AND FRIENDSHIP
     const timer = setInterval(() => {
       setNow(Date.now());
     }, 5000);
 
-    const subscription = AppState.addEventListener(
-      'change',
-      state => {
-        if (state === 'active') {
-          setNow(Date.now());
-        }
-      },
-    );
+    const subscription =
+      AppState.addEventListener(
+        'change',
+        state => {
+          if (state === 'active') {
+            setNow(Date.now());
+          }
+        },
+      );
 
     return () => {
       active = false;
@@ -185,7 +195,7 @@ export default function HomeScreen({uid}: Props) {
     };
   }, [uid]);
 
-  // RECENT QUIZ SPEECH
+  // LISTEN FOR QUIZ REWARDS
   useEffect(() => {
     const reference = doc(
       getFirestore(),
@@ -216,7 +226,7 @@ export default function HomeScreen({uid}: Props) {
     return unsubscribe;
   }, [uid]);
 
-  // CLEAR TEMPORARY FOOD SPEECH
+  // CLEAR FOOD MESSAGE
   useEffect(() => {
     if (!feedSpeech) {
       return;
@@ -229,7 +239,7 @@ export default function HomeScreen({uid}: Props) {
     return () => clearTimeout(timer);
   }, [feedSpeech]);
 
-  // FEED ESIBAN
+  // FEED THE RACCOON
   const handleFeed = async (item: Food) => {
     if (!game || feeding) {
       return;
@@ -256,7 +266,6 @@ export default function HomeScreen({uid}: Props) {
     }
   };
 
-  // ERROR STATE
   if (errorText) {
     return (
       <View style={styles.center}>
@@ -271,7 +280,6 @@ export default function HomeScreen({uid}: Props) {
     );
   }
 
-  // LOADING STATE
   if (!game) {
     return (
       <View style={styles.center}>
@@ -313,47 +321,51 @@ export default function HomeScreen({uid}: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.page}>
 
-        {/* XP HEADER */}
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.brand}>
-                IndigiPet
-              </Text>
+      {/* FULL-WIDTH GREEN HEADER */}
+      <View style={styles.header}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.brand}>
+              IndigiPet
+            </Text>
 
-              <Text style={styles.headerSmall}>
-                XP · Level {level.level}
-              </Text>
-            </View>
-
-            <CoinAmount amount={game.coins} />
+            <Text style={styles.headerSmall}>
+              XP · Level {level.level}
+            </Text>
           </View>
 
-          <View style={styles.xpTrack}>
-            <View
-              style={[
-                styles.xpFill,
-                {
-                  width:
-                    `${xpPercentage}%` as DimensionValue,
-                },
-              ]}
-            />
-          </View>
-
-          <Text style={styles.xpLabel}>
-            {level.xpIntoLevel} /{' '}
-            {level.xpForNext} XP to next level
-          </Text>
+          <CoinAmount amount={game.coins} />
         </View>
 
-        {/* PET MESSAGE */}
+        <View style={styles.xpTrack}>
+          <View
+            style={[
+              styles.xpFill,
+              {
+                width:
+                  `${xpPercentage}%` as DimensionValue,
+              },
+            ]}
+          />
+        </View>
+
+        <Text style={styles.xpLabel}>
+          {level.xpIntoLevel} /{' '}
+          {level.xpForNext} XP to next level
+        </Text>
+      </View>
+
+      {/* CONTENT BELOW HEADER */}
+      <View style={styles.page}>
+
+        {/* ESIBAN MESSAGE */}
         <TouchableOpacity
           style={styles.speechBubble}
           onPress={() =>
-            setDialogueNumber(value => value + 1)
+            setDialogueNumber(
+              value => value + 1,
+            )
           }>
           <Text style={styles.speechText}>
             {speech}
@@ -362,7 +374,7 @@ export default function HomeScreen({uid}: Props) {
           <View style={styles.speechPointer} />
         </TouchableOpacity>
 
-        {/* ORIGINAL RACCOON PICTURE */}
+        {/* ORIGINAL RACCOON */}
         <View style={styles.scene}>
           <View style={styles.ground} />
 
@@ -373,7 +385,7 @@ export default function HomeScreen({uid}: Props) {
           />
         </View>
 
-        {/* FOOD CARDS */}
+        {/* FOOD OPTIONS */}
         <View style={styles.foodRow}>
           {FOODS.map(item => {
             const cannotAfford =
@@ -441,7 +453,9 @@ export default function HomeScreen({uid}: Props) {
             </Text>
           </View>
 
-          <ProgressBar value={stats.friendship} />
+          <ProgressBar
+            value={stats.friendship}
+          />
         </View>
       </View>
     </View>
@@ -453,13 +467,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.cream,
   },
+
+  // MAIN CONTENT
   page: {
     flex: 1,
+    minHeight: 0,
     paddingHorizontal: 10,
-    paddingTop: 6,
+    paddingTop: 9,
     paddingBottom: 8,
     gap: 8,
   },
+
   center: {
     flex: 1,
     backgroundColor: COLORS.cream,
@@ -467,11 +485,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
+
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.green,
   },
+
   helper: {
     fontSize: 14,
     color: COLORS.brown,
@@ -479,58 +499,71 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
-  // XP HEADER
+  // FULL-WIDTH HEADER
   header: {
     backgroundColor: COLORS.green,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    borderRadius: 0,
+    marginHorizontal: 0,
+    marginTop: 0,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
+
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+
   brand: {
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
+
   headerSmall: {
     fontSize: 12,
+    fontWeight: '500',
     color: '#FFFFFF',
     marginTop: 2,
   },
+
   coinRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 5,
   },
+
   coins: {
-    fontSize: 16,
+    fontSize: 17,
     color: COLORS.gold,
     fontWeight: 'bold',
   },
+
   xpTrack: {
     height: 8,
     backgroundColor: '#064738',
     borderRadius: 8,
     overflow: 'hidden',
-    marginTop: 7,
+    marginTop: 8,
   },
+
   xpFill: {
     height: '100%',
     backgroundColor: COLORS.gold,
     borderRadius: 8,
   },
+
   xpLabel: {
     fontSize: 11,
+    fontWeight: '500',
     color: '#FFFFFF',
-    marginTop: 5,
+    marginTop: 6,
   },
 
-  // SPEECH
+  // SPEECH BUBBLE
   speechBubble: {
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -541,12 +574,14 @@ const styles = StyleSheet.create({
     minHeight: 45,
     justifyContent: 'center',
   },
+
   speechText: {
     fontSize: 14,
     lineHeight: 19,
     color: COLORS.brown,
     textAlign: 'center',
   },
+
   speechPointer: {
     position: 'absolute',
     bottom: -7,
@@ -563,13 +598,14 @@ const styles = StyleSheet.create({
   // RACCOON SCENE
   scene: {
     flex: 1,
-    minHeight: 135,
+    minHeight: 130,
     backgroundColor: '#8CCEE0',
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
+
   ground: {
     position: 'absolute',
     bottom: 0,
@@ -578,6 +614,7 @@ const styles = StyleSheet.create({
     height: '25%',
     backgroundColor: '#4B820D',
   },
+
   petImage: {
     width: '76%',
     height: '88%',
@@ -589,6 +626,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 7,
   },
+
   foodCard: {
     flex: 1,
     backgroundColor: COLORS.card,
@@ -601,13 +639,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   disabled: {
     opacity: 0.5,
   },
+
   foodImage: {
     width: 45,
     height: 35,
   },
+
   foodName: {
     fontSize: 14,
     color: COLORS.brown,
@@ -615,41 +656,47 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 3,
   },
+
   foodCost: {
     fontSize: 13,
     color: COLORS.orange,
     fontWeight: 'bold',
   },
 
-  // HUNGER AND FRIENDSHIP
+  // PET STATISTICS
   statsCard: {
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    minHeight: 105,
+    paddingVertical: 11,
+    minHeight: 103,
     justifyContent: 'center',
   },
+
   statHeading: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+
   friendshipHeading: {
-    marginTop: 12,
+    marginTop: 11,
   },
+
   statName: {
     fontSize: 15,
     fontWeight: 'bold',
     color: COLORS.brown,
   },
+
   statValue: {
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.brown,
   },
+
   barTrack: {
     height: 10,
     backgroundColor: COLORS.track,
@@ -657,6 +704,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 6,
   },
+
   barFill: {
     height: '100%',
     backgroundColor: COLORS.orange,

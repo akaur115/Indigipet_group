@@ -3,12 +3,15 @@ import React, {useEffect, useRef, useState} from 'react';
 
 import {
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+
+import Svg, {Path} from 'react-native-svg';
 
 import {
   doc,
@@ -37,10 +40,8 @@ import {
 
 import QuizScreen from './QuizScreen';
 
-// SVG ICONS
 import PlayIcon from '../../assets/icons/play-icon.svg';
 import ReadingIcon from '../../assets/icons/reading-icon.svg';
-import VolumeIcon from '../../assets/icons/volume-icon.svg';
 
 type Props = {
   uid: string;
@@ -54,6 +55,49 @@ type Category = {
   unlockLevel: number;
   enabled: boolean;
 };
+
+const COLORS = {
+  green: '#035643',
+  audioGreen: '#087D69',
+  audioPressed: '#023B30',
+  cream: '#FFFBEF',
+  brown: '#484139',
+  border: '#E5DAC8',
+};
+
+// CLEAR WHITE SPEAKER SYMBOL
+function SpeakerIcon() {
+  return (
+    <Svg
+      width={25}
+      height={25}
+      viewBox="0 0 24 24"
+      fill="none">
+
+      <Path
+        d="M11 5L6 9H3V15H6L11 19V5Z"
+        stroke="#FFFFFF"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      <Path
+        d="M15.5 8.5C17.2 10.4 17.2 13.6 15.5 15.5"
+        stroke="#FFFFFF"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+
+      <Path
+        d="M18.5 5.5C22 9 22 15 18.5 18.5"
+        stroke="#FFFFFF"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
 
 const CATEGORIES: Category[] = [
   {
@@ -125,7 +169,7 @@ export default function LearningScreen({
 
   const audioRequest = useRef(0);
 
-  // LOAD FIREBASE LEARNING PROGRESS
+  // LOAD FIREBASE PROGRESS
   useEffect(() => {
     const reference = doc(
       getFirestore(),
@@ -144,9 +188,7 @@ export default function LearningScreen({
             : 0,
         );
 
-        setProgress(
-          data?.quizProgress ?? {},
-        );
+        setProgress(data?.quizProgress ?? {});
       },
       error => {
         console.log(
@@ -159,7 +201,7 @@ export default function LearningScreen({
     return unsubscribe;
   }, [uid]);
 
-  // STOP AUDIO WHEN SCREEN UNMOUNTS
+  // RELEASE AUDIO
   useEffect(() => {
     return () => {
       audioRequest.current += 1;
@@ -175,7 +217,6 @@ export default function LearningScreen({
     setPlayingId(null);
   };
 
-  // BACK BUTTON
   const goBack = () => {
     stopAudio();
 
@@ -187,7 +228,6 @@ export default function LearningScreen({
     }
   };
 
-  // OPEN LEARNING CATEGORY
   const enter = (
     item: Category,
     nextMode: 'view' | 'quiz',
@@ -213,7 +253,6 @@ export default function LearningScreen({
     setMode(nextMode);
   };
 
-  // GET WORD MASTERY
   const getTier = (
     cat: QuizCategoryId,
     wordId: string,
@@ -224,7 +263,7 @@ export default function LearningScreen({
     );
   };
 
-  // PLAY WORD RECORDING
+  // AUDIO PLAYBACK
   const handlePlayAudio = async (
     word: QuizWord,
   ) => {
@@ -244,6 +283,7 @@ export default function LearningScreen({
     }
 
     const request = ++audioRequest.current;
+
     setPlayingId(word.id);
 
     try {
@@ -263,7 +303,6 @@ export default function LearningScreen({
     }
   };
 
-  // OPEN QUIZ
   if (category && mode === 'quiz') {
     return (
       <QuizScreen
@@ -282,6 +321,7 @@ export default function LearningScreen({
         <TouchableOpacity
           style={styles.back}
           onPress={goBack}>
+
           <Text style={styles.backText}>
             ‹
           </Text>
@@ -296,7 +336,7 @@ export default function LearningScreen({
         </Text>
       </View>
 
-      {/* VOCABULARY SCREEN */}
+      {/* VOCABULARY VIEW */}
       {category && mode === 'view' ? (
         <ScrollView
           style={styles.scroll}
@@ -323,6 +363,7 @@ export default function LearningScreen({
                 style={styles.wordCard}>
 
                 <View style={styles.wordRow}>
+
                   <View style={styles.wordInfo}>
                     <Text style={styles.ojibwe}>
                       {word.word_ojibwe}
@@ -333,11 +374,11 @@ export default function LearningScreen({
                     </Text>
                   </View>
 
-                  {/* VOLUME ICON */}
-                  <TouchableOpacity
-                    style={[
+                  {/* NEW DARK GREEN SOUND BUTTON */}
+                  <Pressable
+                    style={({pressed}) => [
                       styles.audioButton,
-                      isPlaying &&
+                      (pressed || isPlaying) &&
                         styles.audioButtonActive,
                     ]}
                     onPress={() =>
@@ -348,11 +389,9 @@ export default function LearningScreen({
                       `Play pronunciation of ${word.word_ojibwe}`
                     }>
 
-                    <VolumeIcon
-                      width={24}
-                      height={22}
-                    />
-                  </TouchableOpacity>
+                    <SpeakerIcon />
+
+                  </Pressable>
                 </View>
 
                 {/* MASTERY BADGE */}
@@ -432,7 +471,6 @@ export default function LearningScreen({
                 key={item.id}
                 style={styles.categoryCard}>
 
-                {/* CATEGORY HEADING */}
                 <View style={styles.categoryHeading}>
                   <Text style={styles.categoryIcon}>
                     {item.icon}
@@ -462,7 +500,6 @@ export default function LearningScreen({
 
                 {unlocked && (
                   <>
-                    {/* MASTERY COUNTS */}
                     <View style={styles.countRow}>
                       {(
                         [
@@ -496,7 +533,6 @@ export default function LearningScreen({
                       ))}
                     </View>
 
-                    {/* PLAY AND VIEW BUTTONS */}
                     <View style={styles.actions}>
                       <TouchableOpacity
                         style={styles.playButton}
@@ -546,11 +582,11 @@ export default function LearningScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#FFFBEF',
+    backgroundColor: COLORS.cream,
   },
   header: {
     height: 52,
-    backgroundColor: '#035643',
+    backgroundColor: COLORS.green,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -583,11 +619,10 @@ const styles = StyleSheet.create({
     marginBottom: 11,
   },
 
-  // CATEGORY CARDS
   categoryCard: {
     backgroundColor: '#FFFBF0',
     borderWidth: 1,
-    borderColor: '#E5DAC8',
+    borderColor: COLORS.border,
     borderRadius: 11,
     padding: 12,
     marginBottom: 11,
@@ -606,7 +641,7 @@ const styles = StyleSheet.create({
   categoryTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#035643',
+    color: COLORS.green,
   },
   subtitle: {
     fontSize: 13,
@@ -619,7 +654,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // MASTERY CHIPS
   countRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -636,7 +670,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // PLAY AND VIEW
   actions: {
     flexDirection: 'row',
     gap: 9,
@@ -671,7 +704,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#089BA1',
-    backgroundColor: '#FFFBEF',
+    backgroundColor: COLORS.cream,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -679,16 +712,15 @@ const styles = StyleSheet.create({
   },
   viewText: {
     fontSize: 15,
-    color: '#035643',
+    color: COLORS.green,
     fontWeight: 'bold',
   },
 
-  // VOCABULARY WORDS
   wordCard: {
     padding: 13,
     backgroundColor: '#FFFBF0',
     borderWidth: 1,
-    borderColor: '#E5DAC8',
+    borderColor: COLORS.border,
     borderRadius: 10,
     marginBottom: 9,
   },
@@ -704,27 +736,30 @@ const styles = StyleSheet.create({
   ojibwe: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#035643',
+    color: COLORS.green,
   },
   english: {
     fontSize: 14,
-    color: '#484139',
+    color: COLORS.brown,
     marginTop: 4,
   },
+
+  // UPDATED SOUND BUTTON
   audioButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#DFEFE7',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.audioGreen,
     borderWidth: 1,
-    borderColor: '#B9DAD0',
+    borderColor: '#056C59',
     alignItems: 'center',
     justifyContent: 'center',
   },
   audioButtonActive: {
-    backgroundColor: '#A5DDD4',
-    borderColor: '#089BA1',
+    backgroundColor: COLORS.audioPressed,
+    borderColor: '#012E25',
   },
+
   badge: {
     alignSelf: 'flex-start',
     borderRadius: 5,
