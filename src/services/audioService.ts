@@ -1,139 +1,129 @@
-
 import Sound from 'react-native-sound';
-import type {QuizWord} from '../data/quizWords';
+
+import type {
+  QuizWord,
+} from '../data/quizWords';
 
 Sound.setCategory('Playback');
 
-let activeSound: Sound | null = null;
 let playbackRequest = 0;
-let finishPending: (() => void) | null = null;
 
+let stopCurrent:
+  (() => void) | null = null;
+
+// STOP CURRENT AUDIO
 export function stopWordAudio(): void {
+
   playbackRequest += 1;
 
-  const finish = finishPending;
-  finishPending = null;
+  const stop = stopCurrent;
 
-  if (activeSound) {
-    const sound = activeSound;
-    activeSound = null;
+  stopCurrent = null;
 
-    sound.stop(() => {
-      sound.release();
-    });
-  }
-
-  if (finish) {
-    finish();
-  }
+  stop?.();
 }
 
+// PLAY OJIBWE PRONUNCIATION
 export function playWordAudio(
   word: QuizWord,
 ): Promise<void> {
+
+  // Stop any previously playing word.
   stopWordAudio();
 
-  const filename = word.audio_file_path;
+  const filename =
+    word.audio_file_path;
 
   if (!filename) {
     return Promise.reject(
-      new Error('Audio is unavailable for this word.'),
+      new Error(
+        'No audio recording for this word.',
+      ),
     );
   }
 
-  const request = playbackRequest;
+  const thisRequest = playbackRequest;
 
-  // Support both ordinary filenames and downloaded files
-  // that still have "(1)" in their names.
-  const alternative = filename.replace(
-    /(\.(mp3|wav))$/i,
-    '(1)$1',
-  );
+  return new Promise<void>(
+    (resolve, reject) => {
 
-  const candidates =
-    alternative === filename
-      ? [filename]
-      : [filename, alternative];
-
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-
-    const finish = (error?: Error) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-
-      if (finishPending === cancelPending) {
-        finishPending = null;
-      }
-
-      if (error) {
-        reject(error);
-      } else {
-        resolve();
-      }
-    };
-
-    const cancelPending = () => finish();
-    finishPending = cancelPending;
-
-    const tryLoad = (index: number) => {
-      if (settled || request !== playbackRequest) {
-        finish();
-        return;
-      }
-
-      const candidate = candidates[index];
+      let settled = false;
+      let released = false;
 
       const sound = new Sound(
-        candidate,
-        '',
+        filename,
+        Sound.MAIN_BUNDLE,
         error => {
-          if (settled || request !== playbackRequest) {
-            sound.release();
+
+          // Another word was requested.
+          if (
+            thisRequest !== playbackRequest
+          ) {
             finish();
             return;
           }
 
+          // AUDIO LOAD ERROR
           if (error) {
-            sound.release();
-
-            if (index + 1 < candidates.length) {
-              tryLoad(index + 1);
-            } else {
-              finish(
-                new Error(
-                  `Could not load recording: ${filename}`,
-                ),
-              );
-            }
+            finish(
+              new Error(
+                `Could not load audio: ${filename}`,
+              ),
+            );
             return;
           }
 
-          activeSound = sound;
+          // ALLOW CURRENT AUDIO TO STOP
+          stopCurrent = () => {
+            sound.stop(() => finish());
+          };
 
+          // START PLAYBACK
           sound.play(success => {
-            if (activeSound === sound) {
-              activeSound = null;
-              sound.release();
-            }
 
-            if (request !== playbackRequest) {
-              finish();
-            } else if (success) {
+            if (
+              thisRequest !==
+                playbackRequest ||
+              success
+            ) {
               finish();
             } else {
               finish(
-                new Error('Audio playback failed.'),
+                new Error(
+                  `Audio playback failed: ${filename}`,
+                ),
               );
             }
           });
         },
       );
-    };
 
-    tryLoad(0);
-  });
+      // CLEAN UP AUDIO RESOURCES
+      function finish(error?: Error): void {
+
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+
+        if (
+          thisRequest === playbackRequest
+        ) {
+          stopCurrent = null;
+        }
+
+        if (!released) {
+          released = true;
+          sound.release();
+        }
+
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      }
+    },
+  );
 }
